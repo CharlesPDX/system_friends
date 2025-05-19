@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Interface</title>
+    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">System 1/System 2 Demo</h1>
+        <div id="chatbox" class="box" style="height: 400px; overflow-y: auto;">
+            <!-- Chat messages will be appended here -->
+        </div>
+        <form id="chat-form" hx-post="/chat" hx-target="#chatbox" hx-swap="beforeend">
+            <div class="field has-addons">
+                <div class="control is-expanded">
+                    <input id="user_input" class="input" type="text" name="user_input" placeholder="Type your message..." required>
+                </div>
+                <div class="control">
+                    <button class="button is-info" type="submit">Send</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Handle the response from the server
+        document.body.addEventListener('htmx:beforeSwap', function(event) {
+            if (event.detail.target.id === 'chatbox') {
+                // const userInput = document.getElementById('user_input').value; // Get the user's input
+
+                // const message = document.createElement('div');
+                // message.className = 'message';
+                // message.innerHTML = response;
+                // document.getElementById('chatbox').appendChild(message);
+                const userInput = document.getElementById('user_input').value; // Get the user's input
+                const chatbox = document.getElementById('chatbox');
+
+                // Create a message element for the user's input
+                const userMessage = document.createElement('div');
+                userMessage.className = 'message is-info'; // Optional: Add a class for styling
+                userMessage.innerHTML = `<div class="message-body">You: ${userInput}</div>`;
+                chatbox.appendChild(userMessage); // Append user's message to chatbox
+
+                // Clear the input field
+                document.getElementById('user_input').value = ''; 
+
+                // Scroll to the bottom of the chatbox
+                chatbox.scrollTop = chatbox.scrollHeight; 
+            }
+        });
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            if (event.detail.target.id === 'chatbox') {
+                // const response = event.detail.xhr.response;
+                // const message = document.createElement('div');
+                // message.className = 'message';
+                // message.innerHTML = response;
+                // document.getElementById('chatbox').appendChild(message);
+                document.getElementById('chat-form').reset(); // Clear the input
+                document.getElementById('chatbox').scrollTop = chatbox.scrollHeight; // Scroll to bottom
+            }
+        });
+    </script>
+</body>
+</html>
