@@ -3,12 +3,21 @@ import asyncio
 from dataclasses import dataclass
 import json
 
+from nrclex import NRCLex
 import ollama
 
 @dataclass(kw_only=True)
 class EmotionalResponse:
-    emotion: str
-    confidence: int
+    fear: float
+    anger: float
+    anticipation: float
+    trust: float
+    surprise: float
+    positive: float
+    negative: float
+    sadness: float
+    disgust: float
+    joy: float
 
 @dataclass(kw_only=True)
 class MetacognitiveVector:
@@ -36,15 +45,11 @@ async def compute_metacognitive_state_vector(message: str) -> MetacognitiveVecto
                                problem_importance=problem_importance)
 
 async def _compute_emotional_response(message: str) -> EmotionalResponse:
-    content = f"""Categorize the text's emotional tone as either 'neutral' or identify the presence of one of the given emotions (anger, anticipation, disgust, fear, joy, love, optimism, pessimism, sadness, surprise, trust). 
-Also provide a numeric confidence score, and return it in JSON format {{"emotion": "emotion", "confidence": confidence}}, do not include any additional text
-Text: {message}"""
-    response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
-    try:
-        parsed_response = json.loads(response.message.content)
-        return EmotionalResponse(emotion=parsed_response["emotion"],confidence=int(parsed_response["confidence"] * 100))
-    except:
-        return EmotionalResponse(emotion="unknown", confidence=0)
+    text_object = NRCLex(message)
+    # remove vestigial(?) "anticip" in favor of the populated "anticipation"
+    del text_object.affect_frequencies["anticip"]
+    return EmotionalResponse(**text_object.affect_frequencies)
+
 
 async def _compute_correctness(message:str) -> int:
     return 0
