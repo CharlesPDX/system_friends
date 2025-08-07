@@ -55,16 +55,35 @@ class CorrectnessResponse(ResponseVectors):
 @dataclass(kw_only=True)
 class ExperientialMatchingResponse(ResponseVectors):
     # Weights are adaptive based on context. Should there be constraints on weights?
-    match_with_knowledge_base: float
-    weight_match_with_knowledge_base: float = 0.3
+    knowledge_base_matching: float
+    weight_knowledge_base_matching: float = 0.5
 
-    match_with_historical_base: float
-    weight_match_with_historical_base: float = 0.3
+    historical_responses_matching: float
+    weight_historical_responses_matching: float = 0.5
     
     def compute_value(self) -> int:
         # This calculation assumes the matching values are in the range of [0,100]
-        return self.match_with_knowledge_base * self.weight_match_with_knowledge_base +
-               self.match_with_historical_base * self.weight_match_with_historical_base
+        return min(int(
+            (self.knowledge_base_matching * self.weight_knowledge_base_matching) +
+            (self.historical_responses_matching * self.weight_historical_responses_matching)), 100)
+
+@dataclass(kw_only=True)
+class ConflictInfo(ResponseVectors):
+    # Sum of weights should be 1
+    internal_consistency: float
+    weight_internal_consistency: float = 0.3
+
+    source_agreement: float
+    weight_source_agreement: float = 0.4
+
+    temporal_stability: float
+    weight_temporal_stability: float = 0.3
+
+    def compute_value(self) -> int:
+        return min(int(
+            (self.internal_consistency * self.weight_internal_consistency) +
+            (self.source_agreement * self.weight_source_agreement) +
+            (self.temporal_stability * self.weight_temporal_stability), 100))
 
 @dataclass(kw_only=True)
 class ProblemImportance(ResponseVectors):
@@ -162,11 +181,39 @@ Claim: {message}"""
         return CorrectnessResponse(logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0)
 
 
-async def _compute_experiential_matching(message:str) -> int:
-    return 0
+# Depending how to input knowledge base and historical responses, the prompt template would be different.
+# How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
+async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str) -> int:
+    content = f"""You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.
+Consider the given knowledge as the knowledge base, the given history as the historical responses.
+Measure the matching level from 0 to 100, which is the lowest to the highest.
+Return the response in JSON format {{"knowledge_base_matching": "knowledge base matching", "historical_responses_matching": "historical responses matching"}}; do not include any additional text.
+Knowldege: {knowledge_base}
+History: {historical_responses}
+Claim: {message}"""
+    response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
+    try:
+        parsed_response = json.loads(response.message.content)
+        return ExperientialMatchingResponse(knowledge_base_matching=float(parsed_response["knowledge_base_matching"]), historical_responses_matching=float(parsed_response["historical_responses_matching"]))
+    except:
+        return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
 
-async def _compute_conflict_information(message:str) -> int:
-    return 0
+async def _compute_conflict_information(message:str, sources:str, temproal_info) -> int:
+    content = f"""You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
+a) internal consistency, which measures logical contradictions within the given information
+b) disagreement across multiple sources, which compares the given information from multiple sources
+c) consistency of information over time, which compares the given information from Temproal Information
+Return the response in JSON format {{"internal_consistency": "internal consistency", "source_agreement": "source agreement", "temporal_stability": "temporal stability"}}; do not include any additional text.
+Information: {message}
+Sources:{sources}
+Temproal Information: {temproal_info}
+"""
+    response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
+    try:
+        parsed_response = json.loads(response.message.content)
+        return ConflictInfo(internal_consistency=float(parsed_response["internal_consistency"]), source_agreement=float(parsed_response["source_agreement"]), temporal_stability=float(parsed_response["temporal_stability"]))
+    except:
+        return ConflictInfo(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
 
 async def _compute_problem_importance(original_prompt:str) -> ProblemImportance:
     content = f"""How would you assess the User Prompt for problem importance on the dimensions of potential consequences, temporal urgency, and scope of impact? 
