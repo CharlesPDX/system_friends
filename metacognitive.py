@@ -36,11 +36,12 @@ class EmotionalResponse(ResponseVectors):
 
 @dataclass(kw_only=True)
 class CorrectnessResponse(ResponseVectors):
+    # Sum of weights should be 1
     logical_consistency: float
     weight_logical_consitency: float = 0.3
 
     factual_accuracy: float
-    weight_factual_accuracy: float = 0.3
+    weight_factual_accuracy: float = 0.4
 
     contextual_appropriateness: float
     weight_contextual_appropriateness:float = 0.3
@@ -50,6 +51,20 @@ class CorrectnessResponse(ResponseVectors):
             (self.logical_consistency * self.weight_logical_consitency) + 
             (self.factual_accuracy * self.weight_factual_accuracy) + 
             (self.contextual_appropriateness * self.weight_contextual_appropriateness)), 100)
+
+@dataclass(kw_only=True)
+class ExperientialMatchingResponse(ResponseVectors):
+    # Weights are adaptive based on context. Should there be constraints on weights?
+    match_with_knowledge_base: float
+    weight_match_with_knowledge_base: float = 0.3
+
+    match_with_historical_base: float
+    weight_match_with_historical_base: float = 0.3
+    
+    def compute_value(self) -> int:
+        # This calculation assumes the matching values are in the range of [0,100]
+        return self.match_with_knowledge_base * self.weight_match_with_knowledge_base +
+               self.match_with_historical_base * self.weight_match_with_historical_base
 
 @dataclass(kw_only=True)
 class ProblemImportance(ResponseVectors):
