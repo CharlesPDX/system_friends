@@ -18,7 +18,9 @@ async def chat(request: Request, user_input: str = Form(...)):
         # Generate a response from the system one model and compute the metacognative state vector
         response = await system_one_model.get_response(user_input)
         state = await compute_metacognitive_state_vector(response, user_input)
-        print(state)
+        
+        # print(state.compute_value())
+        # print(state.should_engage_system_two())
 
         return f'<div class="message"><div class="message-body">Bot: {response}</div></div>'
 

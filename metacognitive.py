@@ -1,8 +1,9 @@
 
 from abc import abstractmethod
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import json
+import math
 
 from nrclex import NRCLex
 import ollama
@@ -13,7 +14,7 @@ class ResponseVectors:
     def compute_value(self) -> int: ...
 
 @dataclass(kw_only=True)
-class EmotionalResponse:
+class EmotionalResponse(ResponseVectors):
     fear: float
     anger: float
     anticipation: float
@@ -25,11 +26,30 @@ class EmotionalResponse:
     disgust: float
     joy: float
 
+    def compute_value(self) -> int:
+        self_fields = fields(self)
+        equal_weight = 1 / len(self_fields)
+        running_total = 0.0
+        for field in self_fields:
+            running_total += getattr(self, field.name) * 100 * equal_weight
+        return min(int(running_total), 100)
+
 @dataclass(kw_only=True)
-class CorrectnessResponse:
+class CorrectnessResponse(ResponseVectors):
     logical_consistency: float
+    weight_logical_consitency: float = 0.3
+
     factual_accuracy: float
+    weight_factual_accuracy: float = 0.3
+
     contextual_appropriateness: float
+    weight_contextual_appropriateness:float = 0.3
+
+    def compute_value(self) -> int:
+        return min(int(
+            (self.logical_consistency * self.weight_logical_consitency) + 
+            (self.factual_accuracy * self.weight_factual_accuracy) + 
+            (self.contextual_appropriateness * self.weight_contextual_appropriateness)), 100)
 
 @dataclass(kw_only=True)
 class ProblemImportance(ResponseVectors):
@@ -49,15 +69,41 @@ class ProblemImportance(ResponseVectors):
                 (self.scope_of_impact * self.weight_scope_of_impact)), 100)
 
 @dataclass(kw_only=True)
-class MetacognitiveVector:
+class MetacognitiveVector(ResponseVectors):
     emotional_response: EmotionalResponse
+    weight_emotional_response: float = 0.2
+
     correctness: CorrectnessResponse
+    weight_correctness: float = 0.2
+
     experiential_matching: int
+    weight_experiential_matching: float = 0.2
+
     conflict_information: int
+    weight_conflict_information: float = 0.2
+
     problem_importance: ProblemImportance
+    weight_problem_importance: float = 0.2
+
+    _activation_threshold: float = 0.2
 
     def should_engage_system_two(self) -> bool:
-        return False
+        activation_value = self._activation_function(self.compute_value())
+        print(activation_value)
+        return activation_value >= self._activation_threshold
+
+    
+    def _activation_function(self, value: int) -> float:
+        return 1 / (1 + math.exp(-value))
+
+    def compute_value(self) -> int:
+        return int(
+                    (self.emotional_response.compute_value() * self.weight_emotional_response) + 
+                    (self.correctness.compute_value() * self.weight_correctness) +
+                    (self.experiential_matching * self.weight_experiential_matching) +
+                    (self.conflict_information * self.weight_conflict_information) +
+                    (self.problem_importance.compute_value() * self.weight_problem_importance)
+                )
 
 async def compute_metacognitive_state_vector(response: str, original_prompt: str) -> MetacognitiveVector:
     emotional_response, correctness, experiential_matching, conflict_information, problem_importance = await asyncio.gather(_compute_emotional_response(response), 
@@ -80,9 +126,9 @@ async def _compute_emotional_response(message: str) -> EmotionalResponse:
     if "anticipation" not in text_object.affect_frequencies:
         if "anticip" in text_object.affect_frequencies:
             text_object.affect_frequencies["anticipation"] = text_object.affect_frequencies["anticip"]
-            del text_object.affect_frequencies["anticip"]
         else:
             text_object.affect_frequencies["anticipation"] = 0.0
+    del text_object.affect_frequencies["anticip"]
     return EmotionalResponse(**text_object.affect_frequencies)
 
 
