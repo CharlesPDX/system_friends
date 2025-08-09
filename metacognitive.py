@@ -139,11 +139,11 @@ class MetacognitiveVector(ResponseVectors):
                     (self.problem_importance.compute_value() * self.weight_problem_importance)
                 )
 
-async def compute_metacognitive_state_vector(response: str, original_prompt: str) -> MetacognitiveVector:
+async def compute_metacognitive_state_vector(response: str, original_prompt: str, knowledge_base: str, historical_responses: str, sources:str, temporal_info:str) -> MetacognitiveVector:
     emotional_response, correctness, experiential_matching, conflict_information, problem_importance = await asyncio.gather(_compute_emotional_response(response), 
                                                                                                                             _compute_correctness(response, original_prompt), 
-                                                                                                                            _compute_experiential_matching(response), 
-                                                                                                                            _compute_conflict_information(response), 
+                                                                                                                            _compute_experiential_matching(response, knowledge_base, historical_responses), 
+                                                                                                                            _compute_conflict_information(response, sources, temporal_info), 
                                                                                                                             _compute_problem_importance(response))
     
     
@@ -183,7 +183,7 @@ Claim: {message}"""
 
 # Depending how to input knowledge base and historical responses, the prompt template would be different.
 # How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
-async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str) -> int:
+async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str) -> ExperientialMatchingResponse:
     content = f"""You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.
 Consider the given knowledge as the knowledge base, the given history as the historical responses.
 Measure the matching level from 0 to 100, which is the lowest to the highest.
@@ -198,15 +198,15 @@ Claim: {message}"""
     except:
         return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
 
-async def _compute_conflict_information(message:str, sources:str, temproal_info) -> int:
+async def _compute_conflict_information(message:str, sources:str, temporal_info:str) -> ConflictInfo:
     content = f"""You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
 a) internal consistency, which measures logical contradictions within the given information
 b) disagreement across multiple sources, which compares the given information from multiple sources
-c) consistency of information over time, which compares the given information from Temproal Information
+c) consistency of information over time, which compares the given information from Temporal Information
 Return the response in JSON format {{"internal_consistency": "internal consistency", "source_agreement": "source agreement", "temporal_stability": "temporal stability"}}; do not include any additional text.
 Information: {message}
 Sources:{sources}
-Temproal Information: {temproal_info}
+Temporal Information: {temporal_info}
 """
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
