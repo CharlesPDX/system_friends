@@ -68,7 +68,7 @@ class ExperientialMatchingResponse(ResponseVectors):
             (self.historical_responses_matching * self.weight_historical_responses_matching)), 100)
 
 @dataclass(kw_only=True)
-class ConflictInfo(ResponseVectors):
+class ConflictInformation(ResponseVectors):
     # Sum of weights should be 1
     internal_consistency: float
     weight_internal_consistency: float = 0.3
@@ -83,7 +83,7 @@ class ConflictInfo(ResponseVectors):
         return min(int(
             (self.internal_consistency * self.weight_internal_consistency) +
             (self.source_agreement * self.weight_source_agreement) +
-            (self.temporal_stability * self.weight_temporal_stability), 100))
+            (self.temporal_stability * self.weight_temporal_stability)), 100)
 
 @dataclass(kw_only=True)
 class ProblemImportance(ResponseVectors):
@@ -110,10 +110,10 @@ class MetacognitiveVector(ResponseVectors):
     correctness: CorrectnessResponse
     weight_correctness: float = 0.2
 
-    experiential_matching: int
+    experiential_matching: ExperientialMatchingResponse
     weight_experiential_matching: float = 0.2
 
-    conflict_information: int
+    conflict_information: ConflictInformation
     weight_conflict_information: float = 0.2
 
     problem_importance: ProblemImportance
@@ -134,17 +134,26 @@ class MetacognitiveVector(ResponseVectors):
         return int(
                     (self.emotional_response.compute_value() * self.weight_emotional_response) + 
                     (self.correctness.compute_value() * self.weight_correctness) +
-                    (self.experiential_matching * self.weight_experiential_matching) +
-                    (self.conflict_information * self.weight_conflict_information) +
+                    (self.experiential_matching.compute_value() * self.weight_experiential_matching) +
+                    (self.conflict_information.compute_value() * self.weight_conflict_information) +
                     (self.problem_importance.compute_value() * self.weight_problem_importance)
                 )
 
-async def compute_metacognitive_state_vector(response: str, original_prompt: str, knowledge_base: str, historical_responses: str, sources:str, temporal_info:str) -> MetacognitiveVector:
-    emotional_response, correctness, experiential_matching, conflict_information, problem_importance = await asyncio.gather(_compute_emotional_response(response), 
-                                                                                                                            _compute_correctness(response, original_prompt), 
-                                                                                                                            _compute_experiential_matching(response, knowledge_base, historical_responses), 
-                                                                                                                            _compute_conflict_information(response, sources, temporal_info), 
-                                                                                                                            _compute_problem_importance(response))
+async def compute_metacognitive_state_vector(response: str, 
+                                             original_prompt: str, 
+                                             knowledge_base: str = "", 
+                                             historical_responses: str = "", 
+                                             sources:str = "", 
+                                             temporal_info:str = "") -> MetacognitiveVector:
+    (emotional_response, 
+     correctness, 
+     experiential_matching, 
+     conflict_information, 
+     problem_importance) = await asyncio.gather(_compute_emotional_response(response), 
+                                                _compute_correctness(response, original_prompt), 
+                                                _compute_experiential_matching(response, knowledge_base, historical_responses), 
+                                                _compute_conflict_information(response, sources, temporal_info), 
+                                                _compute_problem_importance(response))
     
     
     return MetacognitiveVector(emotional_response=emotional_response, 
@@ -198,7 +207,7 @@ Claim: {message}"""
     except:
         return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
 
-async def _compute_conflict_information(message:str, sources:str, temporal_info:str) -> ConflictInfo:
+async def _compute_conflict_information(message:str, sources:str, temporal_info:str) -> ConflictInformation:
     content = f"""You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
 a) internal consistency, which measures logical contradictions within the given information
 b) disagreement across multiple sources, which compares the given information from multiple sources
@@ -211,9 +220,9 @@ Temporal Information: {temporal_info}
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
-        return ConflictInfo(internal_consistency=float(parsed_response["internal_consistency"]), source_agreement=float(parsed_response["source_agreement"]), temporal_stability=float(parsed_response["temporal_stability"]))
+        return ConflictInformation(internal_consistency=float(parsed_response["internal_consistency"]), source_agreement=float(parsed_response["source_agreement"]), temporal_stability=float(parsed_response["temporal_stability"]))
     except:
-        return ConflictInfo(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
+        return ConflictInformation(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
 
 async def _compute_problem_importance(original_prompt:str) -> ProblemImportance:
     content = f"""How would you assess the User Prompt for problem importance on the dimensions of potential consequences, temporal urgency, and scope of impact? 
