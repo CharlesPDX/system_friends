@@ -11,7 +11,10 @@ import ollama
 @dataclass
 class ResponseVectors:
     @abstractmethod
-    def compute_value(self) -> int: ...
+    def _compute_value(self) -> int: ...
+
+    def __post_init__(self) -> None:
+        self.calculated_value = self._compute_value()
 
 @dataclass(kw_only=True)
 class EmotionalResponse(ResponseVectors):
@@ -26,7 +29,7 @@ class EmotionalResponse(ResponseVectors):
     disgust: float
     joy: float
 
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         self_fields = fields(self)
         equal_weight = 1 / len(self_fields)
         running_total = 0.0
@@ -46,7 +49,7 @@ class CorrectnessResponse(ResponseVectors):
     contextual_appropriateness: float
     weight_contextual_appropriateness:float = 0.3
 
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         return min(int(
             (self.logical_consistency * self.weight_logical_consitency) + 
             (self.factual_accuracy * self.weight_factual_accuracy) + 
@@ -61,7 +64,7 @@ class ExperientialMatchingResponse(ResponseVectors):
     historical_responses_matching: float
     weight_historical_responses_matching: float = 0.5
     
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         # This calculation assumes the matching values are in the range of [0,100]
         return min(int(
             (self.knowledge_base_matching * self.weight_knowledge_base_matching) +
@@ -79,7 +82,7 @@ class ConflictInformation(ResponseVectors):
     temporal_stability: float
     weight_temporal_stability: float = 0.3
 
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         return min(int(
             (self.internal_consistency * self.weight_internal_consistency) +
             (self.source_agreement * self.weight_source_agreement) +
@@ -96,7 +99,7 @@ class ProblemImportance(ResponseVectors):
     scope_of_impact: float
     weight_scope_of_impact: float = 0.3
 
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         return min(int(
                 (self.potential_consequences * self.weight_potential_consequences) + 
                 (self.temporal_urgency * self.weight_temporal_urgency) + 
@@ -119,24 +122,24 @@ class MetacognitiveVector(ResponseVectors):
     problem_importance: ProblemImportance
     weight_problem_importance: float = 0.2
 
-    _activation_threshold: float = 0.2
+    _activation_threshold: float = 0.9
 
     def should_engage_system_two(self) -> bool:
-        activation_value = self._activation_function(self.compute_value())
+        activation_value = self._activation_function(self.calculated_value)
         print(activation_value)
         return activation_value >= self._activation_threshold
 
     
     def _activation_function(self, value: int) -> float:
-        return 1 / (1 + math.exp(-value))
+        return 1 / (1 + math.exp(-value*0.00001))
 
-    def compute_value(self) -> int:
+    def _compute_value(self) -> int:
         return int(
-                    (self.emotional_response.compute_value() * self.weight_emotional_response) + 
-                    (self.correctness.compute_value() * self.weight_correctness) +
-                    (self.experiential_matching.compute_value() * self.weight_experiential_matching) +
-                    (self.conflict_information.compute_value() * self.weight_conflict_information) +
-                    (self.problem_importance.compute_value() * self.weight_problem_importance)
+                    (self.emotional_response._compute_value() * self.weight_emotional_response) + 
+                    (self.correctness._compute_value() * self.weight_correctness) +
+                    (self.experiential_matching._compute_value() * self.weight_experiential_matching) +
+                    (self.conflict_information._compute_value() * self.weight_conflict_information) +
+                    (self.problem_importance._compute_value() * self.weight_problem_importance)
                 )
 
 async def compute_metacognitive_state_vector(response: str, 
