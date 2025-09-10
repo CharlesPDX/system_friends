@@ -9,5 +9,5 @@ class SystemTwoRequest(BaseModel):
 
 
 class SystemTwoResponse(BaseModel):
-    system_two_response: str
-    metacognitive_vector: MetacognitiveVector
+    system_two_response: str | None
+    metacognitive_vector: MetacognitiveVector | None

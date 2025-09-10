@@ -18,6 +18,8 @@ class ResponseVectors:
 
 @dataclass(kw_only=True)
 class EmotionalResponse(ResponseVectors):
+    version: str = "0.1"
+    
     fear: float
     anger: float
     anticipation: float
@@ -34,11 +36,14 @@ class EmotionalResponse(ResponseVectors):
         equal_weight = 1 / len(self_fields)
         running_total = 0.0
         for field in self_fields:
-            running_total += getattr(self, field.name) * 100 * equal_weight
+            if field.name != "version":
+                running_total += getattr(self, field.name) * 100 * equal_weight
         return min(int(running_total), 100)
 
 @dataclass(kw_only=True)
 class CorrectnessResponse(ResponseVectors):
+    version: str = "0.1"
+
     # Sum of weights should be 1
     logical_consistency: float
     weight_logical_consitency: float = 0.3
@@ -57,6 +62,8 @@ class CorrectnessResponse(ResponseVectors):
 
 @dataclass(kw_only=True)
 class ExperientialMatchingResponse(ResponseVectors):
+    version: str = "0.1"
+
     # Weights are adaptive based on context. Should there be constraints on weights?
     knowledge_base_matching: float
     weight_knowledge_base_matching: float = 0.5
@@ -72,6 +79,8 @@ class ExperientialMatchingResponse(ResponseVectors):
 
 @dataclass(kw_only=True)
 class ConflictInformation(ResponseVectors):
+    version: str = "0.1"
+
     # Sum of weights should be 1
     internal_consistency: float
     weight_internal_consistency: float = 0.3
@@ -90,6 +99,8 @@ class ConflictInformation(ResponseVectors):
 
 @dataclass(kw_only=True)
 class ProblemImportance(ResponseVectors):
+    version: str = "0.1"
+
     potential_consequences: float
     weight_potential_consequences: float = 0.3
 
@@ -107,6 +118,7 @@ class ProblemImportance(ResponseVectors):
 
 @dataclass(kw_only=True)
 class MetacognitiveVector(ResponseVectors):
+    version: str = "0.1"
     emotional_response: EmotionalResponse
     weight_emotional_response: float = 0.2
 
