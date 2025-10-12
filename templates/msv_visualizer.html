@@ -1,0 +1,49 @@
+<div class="columns">
+<!-- Column 1 -->
+  <div class="column">
+    <div class="collapsible json-content" id="jsonContent">
+        <pre>{{msv_json}}</pre>
+    </div>
+ </div>
+ <!-- Column 2 -->
+  <div class="column">
+      <div class="container">
+        <!-- First Level Tabs -->
+        <div class="tabs is-boxed">
+            <ul id="main-tabs">
+                {% for item in msv_graphs %}
+                <li class="is-active" data-target="tab{{loop.index}}"><a>System {{loop.index}}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Second Level Tabs -->
+        <div class="tabs is-boxed is-small">
+            <ul id="sub-tabs">
+                {% for item in msv_graphs[0][1].keys() %}
+                <li class="is-active" data-target="subtab{{loop.index}}"><a>{{item}}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Content Container -->
+        <div class="tab-content">
+            <div id="content">
+                {% for item in msv_graphs %}
+                {% set outer_loop = loop %}
+                    {% autoescape false %}
+                    {{item[0]}}
+                    {% endautoescape %}
+                    {% for graph in item[1].values() %}
+                        {% if loop.first %}
+                            {% set class = 'tab-item' %}
+                        {% else %}
+                            {% set class = 'tab-item hidden' %}
+                        {% endif %}
+                        <div class="{{class}}" id="tab{{outer_loop.index}}-subtab{{loop.index}}">{% autoescape false %}{{graph}}{% endautoescape %}</div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+  </div>

@@ -4,8 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Interface</title>
-    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" integrity="sha384-ZBXiYtYQ6hJ2Y0ZNoYuI+Nq5MqWBr+chMrS/RkXpNzQCApHEhOt2aY8EJgqwHLkJ" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.8.0.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-widgets-3.8.0.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-tables-3.8.0.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-gl-3.8.0.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-mathjax-3.8.0.min.js" crossorigin="anonymous"></script>
+        <style>
+        /* Basic Styles for tabs */
+        .tab-content {
+            margin-top: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -23,7 +37,14 @@
                 </div>
             </div>
         </form>
+        <div class="control">
+            <button class="button is-info" type="submit" hx-post="/reset" hx-swap="none">Reset</button>
+        </div>
+        <div id="system-details">
+
+        </div>
     </div>
+    
 
     <script>
         // Handle the response from the server
@@ -60,8 +81,60 @@
                 // document.getElementById('chatbox').appendChild(message);
                 document.getElementById('chat-form').reset(); // Clear the input
                 document.getElementById('chatbox').scrollTop = chatbox.scrollHeight; // Scroll to bottom
+            } else if (event.detail.target.id === 'system-details') {
+                refreshClickableTabs();
             }
         });
+        refreshClickableTabs = function () {
+            const mainTabs = document.querySelectorAll('#main-tabs li');
+            const subTabs = document.querySelectorAll('#sub-tabs li');
+            const contentItems = document.querySelectorAll('.tab-item');
+
+            // Main tab click event
+            mainTabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const target = this.dataset.target;
+                    mainTabs.forEach(t => t.classList.remove('is-active'));
+                    this.classList.add('is-active');
+
+                    // Reset sub-tabs to the first one
+                    subTabs.forEach(t => t.classList.remove('is-active'));
+                    subTabs[0].classList.add('is-active');
+
+                    // Update content to show the first subtab of the active main tab
+                    displayContent(target, subTabs[0].dataset.target);
+                });
+            });
+
+            // Sub-tab click event
+            subTabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const activeMainTab = document.querySelector('#main-tabs li.is-active').dataset.target;
+                    const target = this.dataset.target;
+
+                    subTabs.forEach(t => t.classList.remove('is-active'));
+                    this.classList.add('is-active');
+
+                    // Update content
+                    displayContent(activeMainTab, target);
+                });
+            });
+
+            // Function to display content based on selected tabs
+            function displayContent(mainTab, subTab) {
+                contentItems.forEach(item => {
+                    item.classList.add('hidden'); // Hide all content items
+                });
+                const activeItem = document.getElementById(`${mainTab}-${subTab}`);
+                if (activeItem) {
+                    activeItem.classList.remove('hidden'); // Show the selected content
+                }
+            }
+
+            // Initial content load
+            displayContent('tab1', 'subtab1');
+        };
     </script>
+
 </body>
 </html>

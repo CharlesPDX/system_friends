@@ -27,6 +27,7 @@ def run_experiments(url: str, experiments: Experiments):
         errors = []
         logging.info(f"Starting experiment {experiment_id}")
         number_of_prompts = len(experiment.prompts)
+        
         for prompt_index, prompt in enumerate(experiment.prompts):
             logging.info(f"Sending prompt {prompt_index+1} of {number_of_prompts}")
             try:
@@ -36,6 +37,7 @@ def run_experiments(url: str, experiments: Experiments):
             except Exception as e:
                 response_code = response.status_code if response else -1
                 errors.append(f"{prompt_index} - '{response_code}' - '{e}'")
+        
         utc_experiment_end = datetime.now(timezone.utc)
         duration = (utc_experiment_end - utc_experiment_start).seconds
         completed.completed_experiments.append(CompletedExperiment(experiment_id=experiment_id, 
