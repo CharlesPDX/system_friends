@@ -9,7 +9,9 @@ from nrclex import NRCLex
 import ollama
 
 @dataclass
-class ResponseVectors:
+class ResponseVectors:   
+    calculated_value: int = 0
+    
     @abstractmethod
     def _compute_value(self) -> int: ...
 
@@ -21,23 +23,41 @@ class EmotionalResponse(ResponseVectors):
     version: str = "0.1"
     
     fear: float
+    weight_fear: float = 0.1
+    
     anger: float
+    weight_anger: float = 0.1
+
     anticipation: float
+    weight_anticipation: float = 0.1
+
     trust: float
+    weight_trust: float = 0.1
+    
     surprise: float
+    weight_surprise: float = 0.1
+
     positive: float
+    weight_positive: float = 0.1
+
     negative: float
+    weight_negative: float = 0.1
+
     sadness: float
+    weight_sadness: float = 0.1
+
     disgust: float
+    weight_disgust: float = 0.1
+    
     joy: float
+    weight_joy: float = 0.1
 
     def _compute_value(self) -> int:
         self_fields = fields(self)
-        equal_weight = 1 / len(self_fields)
         running_total = 0.0
         for field in self_fields:
-            if field.name != "version":
-                running_total += getattr(self, field.name) * 100 * equal_weight
+            if field.name != "version" and field.name != "calculated_value" and not field.name.startswith("weight_"):
+                running_total += getattr(self, field.name) * getattr(self, f"weight_{field.name}")
         return min(int(running_total), 100)
 
 @dataclass(kw_only=True)
@@ -102,7 +122,7 @@ class ProblemImportance(ResponseVectors):
     version: str = "0.1"
 
     potential_consequences: float
-    weight_potential_consequences: float = 0.3
+    weight_potential_consequences: float = 0.4
 
     temporal_urgency: float
     weight_temporal_urgency: float = 0.3
@@ -138,9 +158,7 @@ class MetacognitiveVector(ResponseVectors):
 
     def should_engage_system_two(self) -> bool:
         activation_value = self._activation_function(self.calculated_value)
-        print(activation_value)
         return activation_value >= self._activation_threshold
-
     
     def _activation_function(self, value: int) -> float:
         return 1 / (1 + math.exp(-value*0.00001))
@@ -187,7 +205,7 @@ async def _compute_emotional_response(message: str) -> EmotionalResponse:
         else:
             text_object.affect_frequencies["anticipation"] = 0.0
     del text_object.affect_frequencies["anticip"]
-    return EmotionalResponse(**text_object.affect_frequencies)
+    return EmotionalResponse(**{k: v * 100 for k,v in text_object.affect_frequencies.items()})
 
 
 async def _compute_correctness(message:str, original_prompt: str) -> CorrectnessResponse:
