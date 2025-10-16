@@ -87,8 +87,33 @@
         });
         refreshClickableTabs = function () {
             const mainTabs = document.querySelectorAll('#main-tabs li');
+            const msvTabs = document.querySelectorAll('#msv-tabs li');
+
             const subTabs = document.querySelectorAll('#sub-tabs li');
             const contentItems = document.querySelectorAll('.tab-item');
+
+            const msvContentItems = document.querySelectorAll('.tab9-item');
+            
+            msvTabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    const target = this.dataset.target;
+                    msvTabs.forEach(t => t.classList.remove('is-active'));
+                    this.classList.add('is-active');
+
+                    // Update content to show the first subtab of the active main tab
+                    displayMsvContent(target);
+                });
+            });
+
+            function displayMsvContent(mainTab) {
+                msvContentItems.forEach(item => {
+                    item.classList.add('hidden'); // Hide all content items
+                });
+                const activeItem = document.getElementById(`${mainTab}`);
+                if (activeItem) {
+                    activeItem.classList.remove('hidden'); // Show the selected content
+                }
+            }
 
             // Main tab click event
             mainTabs.forEach(tab => {

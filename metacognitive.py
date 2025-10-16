@@ -8,6 +8,8 @@ import math
 from nrclex import NRCLex
 import ollama
 
+from prompts import PromptNames, Prompts
+
 @dataclass
 class ResponseVectors:   
     calculated_value: int = 0
@@ -154,7 +156,7 @@ class MetacognitiveVector(ResponseVectors):
     problem_importance: ProblemImportance
     weight_problem_importance: float = 0.2
 
-    _activation_threshold: float = 0.9
+    _activation_threshold: float = 0.1
 
     def should_engage_system_two(self) -> bool:
         activation_value = self._activation_function(self.calculated_value)
@@ -172,21 +174,23 @@ class MetacognitiveVector(ResponseVectors):
                     (self.problem_importance._compute_value() * self.weight_problem_importance)
                 )
 
-async def compute_metacognitive_state_vector(response: str, 
+async def compute_metacognitive_state_vector(prompts: Prompts,
+                                             response: str, 
                                              original_prompt: str, 
                                              knowledge_base: str = "", 
                                              historical_responses: str = "", 
                                              sources:str = "", 
-                                             temporal_info:str = "") -> MetacognitiveVector:
+                                             temporal_info:str = "",) -> MetacognitiveVector:
+    prompts = Prompts()
     (emotional_response, 
      correctness, 
      experiential_matching, 
      conflict_information, 
      problem_importance) = await asyncio.gather(_compute_emotional_response(response), 
-                                                _compute_correctness(response, original_prompt), 
-                                                _compute_experiential_matching(response, knowledge_base, historical_responses), 
-                                                _compute_conflict_information(response, sources, temporal_info), 
-                                                _compute_problem_importance(response))
+                                                _compute_correctness(response, original_prompt, prompts), 
+                                                _compute_experiential_matching(response, knowledge_base, historical_responses, prompts), 
+                                                _compute_conflict_information(response, sources, temporal_info, prompts), 
+                                                _compute_problem_importance(response, prompts))
     
     
     return MetacognitiveVector(emotional_response=emotional_response, 
@@ -208,13 +212,8 @@ async def _compute_emotional_response(message: str) -> EmotionalResponse:
     return EmotionalResponse(**{k: v * 100 for k,v in text_object.affect_frequencies.items()})
 
 
-async def _compute_correctness(message:str, original_prompt: str) -> CorrectnessResponse:
-    content = f"""Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? 
-Consider the contextual appropriateness with the given context. 
-Assess each dimension from 0 to 100 and return the response in JSON format {{"logical_consistency": "logical consistency", "factual_accuracy": "factual accuracy", "contextual_appropriateness": "contextual appropriateness"}}, 
-do not include any additional text.
-Context: {original_prompt}
-Claim: {message}"""
+async def _compute_correctness(message:str, original_prompt: str, prompts: Prompts) -> CorrectnessResponse:
+    content = prompts.get_prompt(PromptNames.Correctness, {"original_prompt": original_prompt, "message": message})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
@@ -225,14 +224,8 @@ Claim: {message}"""
 
 # Depending how to input knowledge base and historical responses, the prompt template would be different.
 # How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
-async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str) -> ExperientialMatchingResponse:
-    content = f"""You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.
-Consider the given knowledge as the knowledge base, the given history as the historical responses.
-Measure the matching level from 0 to 100, which is the lowest to the highest.
-Return the response in JSON format {{"knowledge_base_matching": "knowledge base matching", "historical_responses_matching": "historical responses matching"}}; do not include any additional text.
-Knowldege: {knowledge_base}
-History: {historical_responses}
-Claim: {message}"""
+async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str, prompts: Prompts) -> ExperientialMatchingResponse:
+    content = prompts.get_prompt(PromptNames.Experiential_Matching, {"knowledge_base": knowledge_base, "message": message, "historical_responses": historical_responses})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
@@ -240,16 +233,8 @@ Claim: {message}"""
     except:
         return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
 
-async def _compute_conflict_information(message:str, sources:str, temporal_info:str) -> ConflictInformation:
-    content = f"""You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
-a) internal consistency, which measures logical contradictions within the given information
-b) disagreement across multiple sources, which compares the given information from multiple sources
-c) consistency of information over time, which compares the given information from Temporal Information
-Return the response in JSON format {{"internal_consistency": "internal consistency", "source_agreement": "source agreement", "temporal_stability": "temporal stability"}}; do not include any additional text.
-Information: {message}
-Sources:{sources}
-Temporal Information: {temporal_info}
-"""
+async def _compute_conflict_information(message:str, sources:str, temporal_info:str, prompts: Prompts) -> ConflictInformation:
+    content = prompts.get_prompt(PromptNames.Conflict_Information, {"sources": sources, "message": message, "temporal_info": temporal_info})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
@@ -257,11 +242,8 @@ Temporal Information: {temporal_info}
     except:
         return ConflictInformation(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
 
-async def _compute_problem_importance(original_prompt:str) -> ProblemImportance:
-    content = f"""How would you assess the User Prompt for problem importance on the dimensions of potential consequences, temporal urgency, and scope of impact? 
-Assess each dimension from 0 to 100 and return the response in JSON format {{"potential_consequences": "potential consequences", "temporal_urgency": "temporal urgency", "scope_of_impact": "scope of impact"}}, 
-do not include any additional text.
-User Prompt: {original_prompt}"""
+async def _compute_problem_importance(original_prompt:str, prompts: Prompts) -> ProblemImportance:
+    content = prompts.get_prompt(PromptNames.Problem_Importance, {"original_prompt": original_prompt})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)

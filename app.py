@@ -20,6 +20,7 @@ from bokeh.embed import components
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import MetacognitiveVector, compute_metacognitive_state_vector
+from prompts import Prompts
 from system_communication_objects import SystemTwoRequest, SystemTwoResponse
 import system_one_model
 import system_two_model
@@ -68,46 +69,44 @@ excluded_keys = {"calculated_value", "version"}
 
 @app.get("/get_chart", response_class=HTMLResponse)
 async def get_chart(request: Request, id: str=None):
-    msv_response = {}
+    msv_response = []
     msv_graphs = []
     
     if id:
         for system_number, msv in enumerate(msv_state.get(id, [])):
             system_label = f"System {system_number+1}"
-            msv_response[system_label] = asdict(msv) | {"activation_result": msv._activation_function(msv.calculated_value)}
+            msv_response.append(json.dumps(asdict(msv) | {"activation_result": msv._activation_function(msv.calculated_value)}, indent=2))
             
-            if system_number == 0:
-                data = {"emotional_response": msv.emotional_response.calculated_value, 
-                        "correctness": msv.correctness.calculated_value, 
-                        "experiential_matching": msv.experiential_matching.calculated_value, 
-                        "conflict_information": msv.conflict_information.calculated_value,
-                        "problem_importance": msv.problem_importance.calculated_value, }
-                emotional_data = _clean_values(msv.emotional_response)
-                correctness_data =_clean_values(msv.correctness)
-                experiential_matching_data = _clean_values(msv.experiential_matching)
-                conflict_information_data = _clean_values(msv.conflict_information)
-                problem_importance_data = _clean_values(msv.problem_importance)
+            data = {"emotional_response": msv.emotional_response.calculated_value, 
+                    "correctness": msv.correctness.calculated_value, 
+                    "experiential_matching": msv.experiential_matching.calculated_value, 
+                    "conflict_information": msv.conflict_information.calculated_value,
+                    "problem_importance": msv.problem_importance.calculated_value, }
+            emotional_data = _clean_values(msv.emotional_response)
+            correctness_data =_clean_values(msv.correctness)
+            experiential_matching_data = _clean_values(msv.experiential_matching)
+            conflict_information_data = _clean_values(msv.conflict_information)
+            problem_importance_data = _clean_values(msv.problem_importance)
 
-                
-                # Create a Bokeh plot
-                msv_components_chart = _generate_chart(data, "MSV Components", f"{system_label} MSV")
-                emotion_chart = _generate_chart(emotional_data, "Emotion Components", f"{system_label} Emotion Vector")
-                correctness_chart = _generate_chart(correctness_data, "Correctness Components", f"{system_label} Correctness Vector")
-                experiential_chart = _generate_chart(experiential_matching_data, "Experiential Components", f"{system_label} Experiential Vector")
-                conflict_chart = _generate_chart(conflict_information_data, "Conflict Components", f"{system_label} Conflict Vector")
-                problem_importance_chart = _generate_chart(problem_importance_data, "Problem Importance Components", f"{system_label} Problem Importance Vector")
+            # Create a Bokeh plot
+            msv_components_chart = _generate_chart(data, "MSV Components", f"{system_label} MSV")
+            emotion_chart = _generate_chart(emotional_data, "Emotion Components", f"{system_label} Emotion Vector")
+            correctness_chart = _generate_chart(correctness_data, "Correctness Components", f"{system_label} Correctness Vector")
+            experiential_chart = _generate_chart(experiential_matching_data, "Experiential Components", f"{system_label} Experiential Vector")
+            conflict_chart = _generate_chart(conflict_information_data, "Conflict Components", f"{system_label} Conflict Vector")
+            problem_importance_chart = _generate_chart(problem_importance_data, "Problem Importance Components", f"{system_label} Problem Importance Vector")
 
-                # Generate the plot's HTML
-                parts = components({ChartNames.overall_msv.value: msv_components_chart, 
-                                    ChartNames.emotional_response.value: emotion_chart, 
-                                    ChartNames.correctness.value: correctness_chart,
-                                    ChartNames.experiential_matching.value: experiential_chart,
-                                    ChartNames.conflict_information.value: conflict_chart,
-                                    ChartNames.problem_importance.value: problem_importance_chart})
-                msv_graphs.append(parts)
+            # Generate the plots' HTML
+            parts = components({ChartNames.overall_msv.value: msv_components_chart, 
+                                ChartNames.emotional_response.value: emotion_chart, 
+                                ChartNames.correctness.value: correctness_chart,
+                                ChartNames.experiential_matching.value: experiential_chart,
+                                ChartNames.conflict_information.value: conflict_chart,
+                                ChartNames.problem_importance.value: problem_importance_chart})
+            msv_graphs.append(parts)
 
     return templates.TemplateResponse(
-        request=request, name="msv_visualizer.html", context={"msv_graphs": msv_graphs, "msv_json": json.dumps(msv_response, indent=2)}
+        request=request, name="msv_visualizer.html", context={"msv_graphs": msv_graphs, "msv_json": msv_response}
     )
 
 def _clean_values(value) -> dict[str, float]:
@@ -145,18 +144,22 @@ def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
         msv_state[id].append(msv_system_two)
     return id
 
+prompts = Prompts()
+
 async def run_system_one(user_input:str) -> tuple[str, str]:
     try:
+        global prompts
         # Generate a response from the system one model and compute the metacognative state vector
         response = await system_one_model.get_response(user_input)
-        state = await compute_metacognitive_state_vector(response, user_input)
+        state = await compute_metacognitive_state_vector(prompts, response, user_input)
         
         parsed_response = SystemTwoResponse(system_two_response=None, metacognitive_vector=None)
         if state.should_engage_system_two():
             system_two_response = httpx.post(f"{app_args.system_two_url}/system2", 
                                              content=SystemTwoRequest(user_prompt=user_input, 
                                                                       system_one_response=response, 
-                                                                      metacognitive_vector=state).model_dump_json(), 
+                                                                      metacognitive_vector=state,
+                                                                      prompts=prompts).model_dump_json(), 
                                                                       timeout=None)
             parsed_response = SystemTwoResponse.model_validate_json(system_two_response.text)
 
@@ -178,10 +181,11 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
 @app.post("/system2")
 async def run_system_two(system_two_request: SystemTwoRequest) -> SystemTwoResponse:
     # This requires running a second instance with the `--system-two`` flag:
+    global prompts
     response = await system_two_model.get_response(system_two_request.user_prompt, 
                                                    system_two_request.system_one_response, 
                                                    system_two_request.metacognitive_vector)
-    state = await compute_metacognitive_state_vector(response, system_two_request.system_one_response)
+    state = await compute_metacognitive_state_vector(prompts, response, system_two_request.system_one_response)
 
     return SystemTwoResponse(system_two_response=response, metacognitive_vector=state)
 
@@ -193,6 +197,7 @@ session_id: str | None = None
 
 @app.post("/reset")
 async def reset_system() -> None:
+    # TODO take in prompts & weights
     utc_now = datetime.now(timezone.utc)
     formatted_datetime = utc_now.strftime("%Y-%m-%d_%H_%M_%S_%f")
     data_directory = Path("data")

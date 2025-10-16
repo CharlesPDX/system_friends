@@ -1,9 +1,30 @@
 <div class="columns">
 <!-- Column 1 -->
   <div class="column">
-    <div class="collapsible json-content" id="jsonContent">
-        <pre>{{msv_json}}</pre>
+    <div class="tabs is-boxed">
+        <ul id="msv-tabs">
+            {% for item in msv_json %}
+                {% if loop.first %}
+                    {% set class = 'is-active' %}
+                {% else %}
+                    {% set class = '' %}
+                {% endif %}
+                <li class="{{class}}" data-target="tab9-{{loop.index}}"><a>System {{loop.index}} MSV</a></li>
+            {% endfor %}
+        </ul>
     </div>
+        <div class="tab-content">
+            <div id="msv-content">
+                {% for item in msv_json %}
+                    {% if loop.first %}
+                        {% set class = 'tab9-item' %}
+                    {% else %}
+                        {% set class = 'tab9-item hidden' %}
+                    {% endif %}
+                    <div class="{{class}}" id="tab9-{{loop.index}}"><pre>{{item}}</pre></div>
+                {% endfor %}
+            </div>
+        </div>
  </div>
  <!-- Column 2 -->
   <div class="column">
@@ -12,7 +33,12 @@
         <div class="tabs is-boxed">
             <ul id="main-tabs">
                 {% for item in msv_graphs %}
-                <li class="is-active" data-target="tab{{loop.index}}"><a>System {{loop.index}}</a></li>
+                    {% if loop.first %}
+                        {% set class = 'is-active' %}
+                    {% else %}
+                        {% set class = '' %}
+                    {% endif %}
+                <li class="{{class}}"data-target="tab{{loop.index}}"><a>System {{loop.index}}</a></li>
                 {% endfor %}
             </ul>
         </div>
@@ -21,7 +47,12 @@
         <div class="tabs is-boxed is-small">
             <ul id="sub-tabs">
                 {% for item in msv_graphs[0][1].keys() %}
-                <li class="is-active" data-target="subtab{{loop.index}}"><a>{{item}}</a></li>
+                    {% if loop.first %}
+                        {% set class = 'is-active' %}
+                    {% else %}
+                        {% set class = '' %}
+                    {% endif %}
+                    <li class="{{class}}" data-target="subtab{{loop.index}}"><a>{{item}}</a></li>
                 {% endfor %}
             </ul>
         </div>
