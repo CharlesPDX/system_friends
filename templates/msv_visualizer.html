@@ -13,18 +13,18 @@
             {% endfor %}
         </ul>
     </div>
-        <div class="tab-content">
-            <div id="msv-content">
-                {% for item in msv_json %}
-                    {% if loop.first %}
-                        {% set class = 'tab9-item' %}
-                    {% else %}
-                        {% set class = 'tab9-item hidden' %}
-                    {% endif %}
-                    <div class="{{class}}" id="tab9-{{loop.index}}"><pre>{{item}}</pre></div>
-                {% endfor %}
-            </div>
+    <div class="tab-content">
+        <div id="msv-content">
+            {% for item in msv_json %}
+                {% if loop.first %}
+                    {% set class = 'tab9-item' %}
+                {% else %}
+                    {% set class = 'tab9-item hidden' %}
+                {% endif %}
+                <div class="{{class}}" id="tab9-{{loop.index}}"><pre>{{item}}</pre></div>
+            {% endfor %}
         </div>
+    </div>
  </div>
  <!-- Column 2 -->
   <div class="column">

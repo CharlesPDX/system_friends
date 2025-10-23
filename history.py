@@ -5,6 +5,7 @@ import subprocess
 
 import sqlite3
 from sqlite3 import Error
+from typing import Any
 
 from metacognitive import MetacognitiveVector
 
@@ -21,7 +22,7 @@ def get_git_revision_hash() -> dict:
     hashes = {"git_revision_hash": git_revision_hash, "git_revision_short_hash": git_revision_short_hash}
     return hashes
 
-def create_database_and_table(db_file: str) -> bool:
+def create_database_and_table(db_file: str, configuration: dict[str, dict[str, Any]]) -> bool:
     """Create a SQLite database and a table called Interactions if it doesn't exist."""
     try:
         # Connect to the SQLite database (or create it if it doesn't exist)
@@ -48,10 +49,11 @@ def create_database_and_table(db_file: str) -> bool:
                 parameters TEXT NOT NULL
             )
         """)
-
         # Commit the changes and close the connection
         conn.commit()
-        cursor.execute("""INSERT INTO parameters(datetime, parameters) VALUES (?, ?)""", (datetime.now(timezone.utc).isoformat(), json.dumps(get_git_revision_hash())))
+        
+        configuration |= get_git_revision_hash()
+        cursor.execute("""INSERT INTO parameters(datetime, parameters) VALUES (?, ?)""", (datetime.now(timezone.utc).isoformat(), json.dumps(configuration)))
         conn.commit()
         print("Database and table created successfully.")
         return True

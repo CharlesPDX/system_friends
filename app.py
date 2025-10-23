@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from enum import StrEnum
 import json
+from typing import Any
 from uuid import uuid4
 from pathlib import Path
 
@@ -19,7 +20,7 @@ from bokeh.embed import components
 
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
-from metacognitive import MetacognitiveVector, compute_metacognitive_state_vector
+from metacognitive import MetacognitiveVector, compute_metacognitive_state_vector, generate_empty_msv
 from prompts import Prompts
 from system_communication_objects import SystemTwoRequest, SystemTwoResponse
 import system_one_model
@@ -65,7 +66,6 @@ class ChartNames(StrEnum):
     conflict_information = "Conflict Information" 
     problem_importance = "Problem Importance"
 
-excluded_keys = {"calculated_value", "version"}
 
 @app.get("/get_chart", response_class=HTMLResponse)
 async def get_chart(request: Request, id: str=None):
@@ -109,8 +109,21 @@ async def get_chart(request: Request, id: str=None):
         request=request, name="msv_visualizer.html", context={"msv_graphs": msv_graphs, "msv_json": msv_response}
     )
 
+excluded_keys = {"calculated_value", "version"}
+
 def _clean_values(value) -> dict[str, float]:
     return {k:v for k, v in asdict(value).items() if k not in excluded_keys and not k.startswith("weight_")}
+
+def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
+    weights = {}
+    for x in (("msv_weights", msv), 
+              ("emotional_response", msv.emotional_response), 
+              ("correctness", msv.correctness), 
+              ("experiential_matching", msv.experiential_matching), 
+              ("conflict_information", msv.conflict_information), 
+              ("problem_importance", msv.problem_importance)):
+        weights[x[0]] = {k:v for k,v in asdict(x[1]).items() if k.startswith("weight")}
+    return weights
 
 def _generate_chart(data: dict[str, float],
                     x_label: str,
@@ -149,9 +162,10 @@ prompts = Prompts()
 async def run_system_one(user_input:str) -> tuple[str, str]:
     try:
         global prompts
+        global weights
         # Generate a response from the system one model and compute the metacognative state vector
         response = await system_one_model.get_response(user_input)
-        state = await compute_metacognitive_state_vector(prompts, response, user_input)
+        state = await compute_metacognitive_state_vector(prompts, weights, response, user_input)
         
         parsed_response = SystemTwoResponse(system_two_response=None, metacognitive_vector=None)
         if state.should_engage_system_two():
@@ -159,7 +173,8 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
                                              content=SystemTwoRequest(user_prompt=user_input, 
                                                                       system_one_response=response, 
                                                                       metacognitive_vector=state,
-                                                                      prompts=prompts).model_dump_json(), 
+                                                                      prompts=prompts,
+                                                                      weights=weights).model_dump_json(), 
                                                                       timeout=None)
             parsed_response = SystemTwoResponse.model_validate_json(system_two_response.text)
 
@@ -181,33 +196,61 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
 @app.post("/system2")
 async def run_system_two(system_two_request: SystemTwoRequest) -> SystemTwoResponse:
     # This requires running a second instance with the `--system-two`` flag:
-    global prompts
     response = await system_two_model.get_response(system_two_request.user_prompt, 
                                                    system_two_request.system_one_response, 
-                                                   system_two_request.metacognitive_vector)
-    state = await compute_metacognitive_state_vector(prompts, response, system_two_request.system_one_response)
+                                                   system_two_request.metacognitive_vector,
+                                                   system_two_request.prompts)
+    state = await compute_metacognitive_state_vector(system_two_request.prompts, 
+                                                     system_two_request.weights, 
+                                                     response, 
+                                                     system_two_request.system_one_response)
 
     return SystemTwoResponse(system_two_response=response, metacognitive_vector=state)
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def read_root(request: Request):  
+    weights_and_prompts = weights | {"prompts": prompts.model_dump()}
+    return templates.TemplateResponse("index.html", {"request": request, "weights_and_prompts": weights_and_prompts})
 
 session_id: str | None = None
+weights: dict[str, dict[str, float]] | None = None
 
-@app.post("/reset")
-async def reset_system() -> None:
-    # TODO take in prompts & weights
+@app.post("/reset", response_class=HTMLResponse)
+async def reset_system(configuration: dict[str, dict[str, Any]] | None = None) -> None:
     utc_now = datetime.now(timezone.utc)
     formatted_datetime = utc_now.strftime("%Y-%m-%d_%H_%M_%S_%f")
     data_directory = Path("data")
     data_directory.mkdir(parents=True, exist_ok=True)
-    created = create_database_and_table(f"data/{formatted_datetime}.sqlite3")
+
+    global prompts
+    global weights
+    if not weights and not configuration:
+        weights = get_weights(generate_empty_msv())
+
+    if configuration:
+        prompts = Prompts(**configuration["prompts"])
+        weights = configuration.copy()
+        del weights["prompts"]
+    current_configuration = weights | {"prompts": prompts.model_dump()}
+    created = create_database_and_table(f"data/{formatted_datetime}.sqlite3", current_configuration)
     msv_state.clear()
     
     if created:
         global session_id 
         session_id = formatted_datetime
+    return f'''
+<div class="notification is-success">
+    <button class="delete"></button>
+    Configuration saved successfully!
+</div>
+<div id="chatbox" class="box" style="height: 400px; overflow-y: auto;" hx-swap-oob="true">
+    <!-- Chat messages will be appended here -->
+</div>
+<input id="user_input" class="input" type="text" name="user_input" placeholder="Type your message..." required hx-swap-oob="true">
+<div id="system-details" hx-swap-oob="true">
+    <!-- System details will be loaded here -->
+</div>
+'''
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ class SystemTwoRequest(BaseModel):
     system_one_response: str
     metacognitive_vector: MetacognitiveVector
     prompts: Prompts
+    weights: dict[str, dict[str, float]]
 
 
 class SystemTwoResponse(BaseModel):

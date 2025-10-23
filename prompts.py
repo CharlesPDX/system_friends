@@ -9,6 +9,8 @@ class PromptNames(StrEnum):
     Experiential_Matching = "experiential_matching_prompt"
     Conflict_Information = "conflict_information_prompt"
     Problem_Importance = "problem_importance_prompt"
+    System_Two_System = "system_two_system_prompt"
+    System_Two_User = "system_two_user_prompt"
 
 
 class Prompts(BaseModel):
@@ -43,6 +45,11 @@ Temporal Information: {{temporal_info}}
 Assess each dimension from 0 to 100 and return the response in JSON format {"potential_consequences": "potential consequences", "temporal_urgency": "temporal urgency", "scope_of_impact": "scope of impact"}, 
 do not include any additional text.
 User Prompt: {{original_prompt}}"""
+
+    system_two_system_prompt: str = "You are a System Two, logical analytical deep thinking system"
+
+    system_two_user_prompt: str = """Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?"""
+
 
     jinja_env: Environment = Field(default_factory=Environment, exclude=True)
 

@@ -68,7 +68,7 @@ class CorrectnessResponse(ResponseVectors):
 
     # Sum of weights should be 1
     logical_consistency: float
-    weight_logical_consitency: float = 0.3
+    weight_logical_consistency: float = 0.3
 
     factual_accuracy: float
     weight_factual_accuracy: float = 0.4
@@ -78,7 +78,7 @@ class CorrectnessResponse(ResponseVectors):
 
     def _compute_value(self) -> int:
         return min(int(
-            (self.logical_consistency * self.weight_logical_consitency) + 
+            (self.logical_consistency * self.weight_logical_consistency) + 
             (self.factual_accuracy * self.weight_factual_accuracy) + 
             (self.contextual_appropriateness * self.weight_contextual_appropriateness)), 100)
 
@@ -175,6 +175,7 @@ class MetacognitiveVector(ResponseVectors):
                 )
 
 async def compute_metacognitive_state_vector(prompts: Prompts,
+                                             weights: dict[str, dict[str, float]],
                                              response: str, 
                                              original_prompt: str, 
                                              knowledge_base: str = "", 
@@ -186,20 +187,20 @@ async def compute_metacognitive_state_vector(prompts: Prompts,
      correctness, 
      experiential_matching, 
      conflict_information, 
-     problem_importance) = await asyncio.gather(_compute_emotional_response(response), 
-                                                _compute_correctness(response, original_prompt, prompts), 
-                                                _compute_experiential_matching(response, knowledge_base, historical_responses, prompts), 
-                                                _compute_conflict_information(response, sources, temporal_info, prompts), 
-                                                _compute_problem_importance(response, prompts))
-    
+     problem_importance) = await asyncio.gather(_compute_emotional_response(response, weights["emotional_response"]), 
+                                                _compute_correctness(response, original_prompt, prompts, weights["correctness"]), 
+                                                _compute_experiential_matching(response, knowledge_base, historical_responses, prompts, weights["experiential_matching"]), 
+                                                _compute_conflict_information(response, sources, temporal_info, prompts, weights["conflict_information"]), 
+                                                _compute_problem_importance(response, prompts, weights["problem_importance"]))
     
     return MetacognitiveVector(emotional_response=emotional_response, 
                                correctness=correctness, 
                                experiential_matching=experiential_matching, 
                                conflict_information=conflict_information, 
-                               problem_importance=problem_importance)
+                               problem_importance=problem_importance,
+                               **weights["msv_weights"])
 
-async def _compute_emotional_response(message: str) -> EmotionalResponse:
+async def _compute_emotional_response(message: str, weights: dict[str, float]) -> EmotionalResponse:
     text_object = NRCLex(message)
     # remove vestigial(?) "anticip" in favor of the populated "anticipation",
     # seems like sometimes "anticipation" is populated sometimes "anticip" ?
@@ -212,41 +213,54 @@ async def _compute_emotional_response(message: str) -> EmotionalResponse:
     return EmotionalResponse(**{k: v * 100 for k,v in text_object.affect_frequencies.items()})
 
 
-async def _compute_correctness(message:str, original_prompt: str, prompts: Prompts) -> CorrectnessResponse:
+async def _compute_correctness(message:str, original_prompt: str, prompts: Prompts, weights: dict[str, float]) -> CorrectnessResponse:
     content = prompts.get_prompt(PromptNames.Correctness, {"original_prompt": original_prompt, "message": message})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
-        return CorrectnessResponse(logical_consistency=parsed_response["logical_consistency"] ,factual_accuracy=int(parsed_response["factual_accuracy"]), contextual_appropriateness=int(parsed_response["contextual_appropriateness"]))
+        return CorrectnessResponse(logical_consistency=parsed_response["logical_consistency"] ,factual_accuracy=int(parsed_response["factual_accuracy"]), contextual_appropriateness=int(parsed_response["contextual_appropriateness"]), **weights)
     except:
-        return CorrectnessResponse(logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0)
+        return CorrectnessResponse(logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0, **weights)
 
 
 # Depending how to input knowledge base and historical responses, the prompt template would be different.
 # How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
-async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str, prompts: Prompts) -> ExperientialMatchingResponse:
+async def _compute_experiential_matching(message:str, knowledge_base:str, historical_responses:str, prompts: Prompts, weights: dict[str, float]) -> ExperientialMatchingResponse:
     content = prompts.get_prompt(PromptNames.Experiential_Matching, {"knowledge_base": knowledge_base, "message": message, "historical_responses": historical_responses})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
-        return ExperientialMatchingResponse(knowledge_base_matching=float(parsed_response["knowledge_base_matching"]), historical_responses_matching=float(parsed_response["historical_responses_matching"]))
+        return ExperientialMatchingResponse(knowledge_base_matching=float(parsed_response["knowledge_base_matching"]), historical_responses_matching=float(parsed_response["historical_responses_matching"]), **weights)
     except:
-        return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
+        return ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0, **weights)
 
-async def _compute_conflict_information(message:str, sources:str, temporal_info:str, prompts: Prompts) -> ConflictInformation:
+async def _compute_conflict_information(message:str, sources:str, temporal_info:str, prompts: Prompts, weights: dict[str, float]) -> ConflictInformation:
     content = prompts.get_prompt(PromptNames.Conflict_Information, {"sources": sources, "message": message, "temporal_info": temporal_info})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
-        return ConflictInformation(internal_consistency=float(parsed_response["internal_consistency"]), source_agreement=float(parsed_response["source_agreement"]), temporal_stability=float(parsed_response["temporal_stability"]))
+        return ConflictInformation(internal_consistency=float(parsed_response["internal_consistency"]), source_agreement=float(parsed_response["source_agreement"]), temporal_stability=float(parsed_response["temporal_stability"]), **weights)
     except:
-        return ConflictInformation(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
+        return ConflictInformation(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0, **weights)
 
-async def _compute_problem_importance(original_prompt:str, prompts: Prompts) -> ProblemImportance:
+async def _compute_problem_importance(original_prompt:str, prompts: Prompts, weights: dict[str, float]) -> ProblemImportance:
     content = prompts.get_prompt(PromptNames.Problem_Importance, {"original_prompt": original_prompt})
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content":content}])
     try:
         parsed_response = json.loads(response.message.content)
-        return ProblemImportance(potential_consequences=float(parsed_response["potential_consequences"]), temporal_urgency=float(parsed_response["temporal_urgency"]), scope_of_impact=float(parsed_response["scope_of_impact"]))
+        return ProblemImportance(potential_consequences=float(parsed_response["potential_consequences"]), temporal_urgency=float(parsed_response["temporal_urgency"]), scope_of_impact=float(parsed_response["scope_of_impact"]), **weights)
     except:
-        return ProblemImportance(potential_consequences=0.0, temporal_urgency=0.0, scope_of_impact=0.0)
+        return ProblemImportance(potential_consequences=0.0, temporal_urgency=0.0, scope_of_impact=0.0, **weights)
+
+def generate_empty_msv() -> MetacognitiveVector:
+    emotional_response = EmotionalResponse(fear = 0, anger = 0, anticipation = 0, trust = 0, surprise = 0, positive = 0, negative = 0, sadness = 0, disgust = 0, joy = 0)
+    correctness = CorrectnessResponse(logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0)
+    experiential_matching =ExperientialMatchingResponse(knowledge_base_matching=0.0, historical_responses_matching=0.0)
+    conflict_information = ConflictInformation(internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0)
+    problem_importance = ProblemImportance(potential_consequences=0.0, temporal_urgency=0.0, scope_of_impact=0.0)
+    
+    return MetacognitiveVector(emotional_response=emotional_response, 
+                               correctness=correctness, 
+                               experiential_matching=experiential_matching, 
+                               conflict_information=conflict_information, 
+                               problem_importance=problem_importance)
