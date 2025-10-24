@@ -4,3 +4,4 @@ Jinja2
 uvicorn
 python-multipart
 NRCLex
+bokeh

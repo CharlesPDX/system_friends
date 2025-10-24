@@ -1,0 +1,371 @@
+<!-- config_form.html - Jinja2 template to be included in other templates -->
+<div class="card">
+    <div class="card-content">
+        <h1 class="title is-3">System Configuration</h1>
+        <p class="subtitle is-6 has-text-grey">Configure weights and prompts for the system</p>
+        
+        <form id="configForm">
+            <!-- MSV Weights -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">MSV Weights</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Emotional Response</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_emotional_response" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['weight_emotional_response'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Correctness</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_correctness" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['weight_correctness'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Experiential Matching</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_experiential_matching" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['weight_experiential_matching'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Conflict Information</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_conflict_information" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['weight_conflict_information'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Problem Importance</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_problem_importance" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['weight_problem_importance'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Emotional Response -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Emotional Response</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Fear</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_fear" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_fear'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Anger</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_anger" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_anger'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Anticipation</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_anticipation" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_anticipation'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Trust</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_trust" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_trust'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Surprise</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_surprise" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_surprise'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Positive</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_positive" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_positive'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Negative</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_negative" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_negative'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Sadness</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_sadness" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_sadness'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Disgust</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_disgust" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_disgust'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Joy</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_joy" step="0.01" min="0" max="1" value="{{ weights_and_prompts['emotional_response']['weight_joy'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Correctness -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Correctness</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Logical Consistency</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_logical_consistency" step="0.01" min="0" max="1" value="{{ weights_and_prompts['correctness']['weight_logical_consistency'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Factual Accuracy</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_factual_accuracy" step="0.01" min="0" max="1" value="{{ weights_and_prompts['correctness']['weight_factual_accuracy'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Contextual Appropriateness</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_contextual_appropriateness" step="0.01" min="0" max="1" value="{{ weights_and_prompts['correctness']['weight_contextual_appropriateness'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Experiential Matching -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Experiential Matching</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Knowledge Base Matching</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_knowledge_base_matching" step="0.01" min="0" max="1" value="{{ weights_and_prompts['experiential_matching']['weight_knowledge_base_matching'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Historical Responses Matching</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_historical_responses_matching" step="0.01" min="0" max="1" value="{{ weights_and_prompts['experiential_matching']['weight_historical_responses_matching'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conflict Information -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Conflict Information</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Internal Consistency</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_internal_consistency" step="0.01" min="0" max="1" value="{{ weights_and_prompts['conflict_information']['weight_internal_consistency'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Source Agreement</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_source_agreement" step="0.01" min="0" max="1" value="{{ weights_and_prompts['conflict_information']['weight_source_agreement'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Temporal Stability</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_temporal_stability" step="0.01" min="0" max="1" value="{{ weights_and_prompts['conflict_information']['weight_temporal_stability'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Problem Importance -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Problem Importance</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Potential Consequences</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_potential_consequences" step="0.01" min="0" max="1" value="{{ weights_and_prompts['problem_importance']['weight_potential_consequences'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Temporal Urgency</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_temporal_urgency" step="0.01" min="0" max="1" value="{{ weights_and_prompts['problem_importance']['weight_temporal_urgency'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <div class="field">
+                            <label class="label">Scope of Impact</label>
+                            <div class="control">
+                                <input class="input" type="number" id="weight_scope_of_impact" step="0.01" min="0" max="1" value="{{ weights_and_prompts['problem_importance']['weight_scope_of_impact'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompts -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Prompts</h2>
+                <div class="field">
+                    <label class="label">Correctness Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="correctness_prompt" required>{{ weights_and_prompts['prompts']['correctness_prompt'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Experiential Matching Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="experiential_matching_prompt" required>{{ weights_and_prompts['prompts']['experiential_matching_prompt'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Conflict Information Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="conflict_information_prompt" required>{{ weights_and_prompts['prompts']['conflict_information_prompt'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Problem Importance Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="problem_importance_prompt">{{ weights_and_prompts['prompts']['problem_importance_prompt'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">System Two System Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="system_two_system_prompt">{{ weights_and_prompts['prompts']['system_two_system_prompt'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">System Two User Prompt</label>
+                    <div class="control">
+                        <textarea class="textarea" id="system_two_user_prompt">{{ weights_and_prompts['prompts']['system_two_user_prompt'] }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="control">
+                    <button type="button" 
+                            class="button is-fullwidth is-large is-primary config-submit-gradient has-text-weight-semibold"
+                            type="submit"
+                            hx-post="/reset"
+                            hx-ext='json-enc'
+                            hx-vars="js:{...getFormData()}"
+                            hx-target="#response-message"
+                            hx-swap="innerHTML">
+                        Submit Configuration
+                    </button>
+                </div>
+            </div>
+
+            <!-- Response message container -->
+            <div id="response-message" class="mt-4"></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function getFormData() {
+        return {
+            msv_weights: {
+                weight_emotional_response: parseFloat(document.getElementById('weight_emotional_response').value),
+                weight_correctness: parseFloat(document.getElementById('weight_correctness').value),
+                weight_experiential_matching: parseFloat(document.getElementById('weight_experiential_matching').value),
+                weight_conflict_information: parseFloat(document.getElementById('weight_conflict_information').value),
+                weight_problem_importance: parseFloat(document.getElementById('weight_problem_importance').value)
+            },
+            emotional_response: {
+                weight_fear: parseFloat(document.getElementById('weight_fear').value),
+                weight_anger: parseFloat(document.getElementById('weight_anger').value),
+                weight_anticipation: parseFloat(document.getElementById('weight_anticipation').value),
+                weight_trust: parseFloat(document.getElementById('weight_trust').value),
+                weight_surprise: parseFloat(document.getElementById('weight_surprise').value),
+                weight_positive: parseFloat(document.getElementById('weight_positive').value),
+                weight_negative: parseFloat(document.getElementById('weight_negative').value),
+                weight_sadness: parseFloat(document.getElementById('weight_sadness').value),
+                weight_disgust: parseFloat(document.getElementById('weight_disgust').value),
+                weight_joy: parseFloat(document.getElementById('weight_joy').value)
+            },
+            correctness: {
+                weight_logical_consistency: parseFloat(document.getElementById('weight_logical_consistency').value),
+                weight_factual_accuracy: parseFloat(document.getElementById('weight_factual_accuracy').value),
+                weight_contextual_appropriateness: parseFloat(document.getElementById('weight_contextual_appropriateness').value)
+            },
+            experiential_matching: {
+                weight_knowledge_base_matching: parseFloat(document.getElementById('weight_knowledge_base_matching').value),
+                weight_historical_responses_matching: parseFloat(document.getElementById('weight_historical_responses_matching').value)
+            },
+            conflict_information: {
+                weight_internal_consistency: parseFloat(document.getElementById('weight_internal_consistency').value),
+                weight_source_agreement: parseFloat(document.getElementById('weight_source_agreement').value),
+                weight_temporal_stability: parseFloat(document.getElementById('weight_temporal_stability').value)
+            },
+            problem_importance: {
+                weight_potential_consequences: parseFloat(document.getElementById('weight_potential_consequences').value),
+                weight_temporal_urgency: parseFloat(document.getElementById('weight_temporal_urgency').value),
+                weight_scope_of_impact: parseFloat(document.getElementById('weight_scope_of_impact').value)
+            },
+            prompts: {
+                correctness_prompt: document.getElementById('correctness_prompt').value,
+                experiential_matching_prompt: document.getElementById('experiential_matching_prompt').value,
+                conflict_information_prompt: document.getElementById('conflict_information_prompt').value,
+                problem_importance_prompt: document.getElementById('problem_importance_prompt').value,
+                system_two_system_prompt: document.getElementById('system_two_system_prompt').value,
+                system_two_user_prompt: document.getElementById('system_two_user_prompt').value
+            }
+        }
+    }
+</script>
