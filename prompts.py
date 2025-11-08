@@ -1,4 +1,4 @@
-from enum import StrEnum
+from enum import StrEnum, auto
 
 from jinja2 import Environment, Template
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,16 @@ class PromptNames(StrEnum):
     Problem_Importance = "problem_importance_prompt"
     System_Two_System = "system_two_system_prompt"
     System_Two_User = "system_two_user_prompt"
+    Domain_Expert_System = auto()
+    Domain_Expert_User = auto()
+    Critic_System = auto()
+    Critic_User = auto()
+    Evaluator_System = auto()
+    Evaluator_user = auto()
+    Generalist_System = auto()
+    Generalist_User = auto()
+    Synthesizer_System = auto()
+    Synthesizer_User = auto()
 
 
 class Prompts(BaseModel):
@@ -50,6 +60,16 @@ User Prompt: {{original_prompt}}"""
 
     system_two_user_prompt: str = """Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?"""
 
+    domain_expert_system: str = """You are a domain expert, based on prior information from {{previous_node_role}}, provide a more insightful response."""
+    domain_expert_user: str = """Based on the previous information, what is your take?"""
+    critic_system: str = """You are a critical analyst, challenge assumptions, think logically, previous information is from a {{previous_node_role}}"""
+    critic_user: str = """Based on the previous information, what is your assessment?"""
+    evaluator_system: str = """You are an evaluator, taking a broader perspective to analyze prior information from {{previous_node_role}} and render an opinion"""
+    evaluator_user: str = """Based on the previous information, what is your assessment?"""
+    generalist_system: str = """You are a generalist, with a wide base of knowledege, previous information is from {{previous_node_role}}"""
+    generalist_user: str = """Based on the previous information, what is your take?"""
+    synthesizer_system: str = """You are a synthesizer, you take information from disperate sources and combine it into a concise cogent response, previous information is from {{previous_node_role}}"""
+    synthesizer_user: str = """Based on all prior information, what is your synthesis?"""
 
     jinja_env: Environment = Field(default_factory=Environment, exclude=True)
 

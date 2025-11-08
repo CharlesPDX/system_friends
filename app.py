@@ -22,7 +22,7 @@ from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import MetacognitiveVector, compute_metacognitive_state_vector, generate_empty_msv
 from prompts import Prompts
-from system_communication_objects import SystemTwoRequest, SystemTwoResponse
+from system_communication_objects import SystemTwoRequest
 import system_one_model
 import system_two_model
 
@@ -167,7 +167,7 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
         response = await system_one_model.get_response(user_input)
         state = await compute_metacognitive_state_vector(prompts, weights, response, user_input)
         
-        parsed_response = SystemTwoResponse(system_two_response=None, metacognitive_vector=None)
+        parsed_response = system_two_model.SystemTwoResponse(system_two_response=None, metacognitive_vector=None, node_responses=None)
         if state.should_engage_system_two():
             system_two_response = httpx.post(f"{app_args.system_two_url}/system2", 
                                              content=SystemTwoRequest(user_prompt=user_input, 
@@ -176,7 +176,7 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
                                                                       prompts=prompts,
                                                                       weights=weights).model_dump_json(), 
                                                                       timeout=None)
-            parsed_response = SystemTwoResponse.model_validate_json(system_two_response.text)
+            parsed_response = system_two_model.SystemTwoResponse.model_validate_json(system_two_response.text)
 
         if session_id:
             record_interaction(db_file=f"data/{session_id}.sqlite3", 
@@ -194,18 +194,9 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
 
 
 @app.post("/system2")
-async def run_system_two(system_two_request: SystemTwoRequest) -> SystemTwoResponse:
+async def run_system_two(system_two_request: SystemTwoRequest) -> system_two_model.SystemTwoResponse:
     # This requires running a second instance with the `--system-two`` flag:
-    response = await system_two_model.get_response(system_two_request.user_prompt, 
-                                                   system_two_request.system_one_response, 
-                                                   system_two_request.metacognitive_vector,
-                                                   system_two_request.prompts)
-    state = await compute_metacognitive_state_vector(system_two_request.prompts, 
-                                                     system_two_request.weights, 
-                                                     response, 
-                                                     system_two_request.system_one_response)
-
-    return SystemTwoResponse(system_two_response=response, metacognitive_vector=state)
+    return await system_two_model.get_response(system_two_request)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):  
