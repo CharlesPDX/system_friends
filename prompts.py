@@ -61,15 +61,15 @@ User Prompt: {{original_prompt}}"""
     system_two_user_prompt: str = """Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?"""
 
     domain_expert_system: str = """You are a domain expert, based on prior information from {{previous_node_role}}, provide a more insightful response."""
-    domain_expert_user: str = """Based on the previous information, what is your take?"""
+    domain_expert_user: str = """Based on the conversation thus far, what is your take?"""
     critic_system: str = """You are a critical analyst, challenge assumptions, think logically, previous information is from a {{previous_node_role}}"""
-    critic_user: str = """Based on the previous information, what is your assessment?"""
+    critic_user: str = """Based on the conversation thus far, what is your assessment?"""
     evaluator_system: str = """You are an evaluator, taking a broader perspective to analyze prior information from {{previous_node_role}} and render an opinion"""
-    evaluator_user: str = """Based on the previous information, what is your assessment?"""
+    evaluator_user: str = """Based on the conversation thus far, what is your assessment?"""
     generalist_system: str = """You are a generalist, with a wide base of knowledege, previous information is from {{previous_node_role}}"""
-    generalist_user: str = """Based on the previous information, what is your take?"""
+    generalist_user: str = """Based on the conversation thus far, what is your take?"""
     synthesizer_system: str = """You are a synthesizer, you take information from disperate sources and combine it into a concise cogent response, previous information is from {{previous_node_role}}"""
-    synthesizer_user: str = """Based on all prior information, what is your synthesis?"""
+    synthesizer_user: str = """Based on all conversation thus far, what is your synthesis?"""
 
     jinja_env: Environment = Field(default_factory=Environment, exclude=True)
 
