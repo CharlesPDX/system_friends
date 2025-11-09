@@ -31,23 +31,23 @@ class Node:
     role: NodeRole = NodeRole.Generalist
     # TODO adjust weights!
     role_weights: dict[NodeRole, dict[str, float]] = {
-        NodeRole.Domain_Expert: {"emotional_response": 0.2, 
-                                  "correctness": 0.2,
-                                  "experiential_matching": 0.2,
-                                  "conflict_information": 0.2,
+        NodeRole.Domain_Expert: {"emotional_response": 0.0, 
+                                  "correctness": 0.7,
+                                  "experiential_matching": 0.0,
+                                  "conflict_information": 0.1,
                                   "problem_importance": 0.2
                                   },
-        NodeRole.Critic: {"emotional_response": 0.2, 
-                                  "correctness": 0.2,
-                                  "experiential_matching": 0.2,
-                                  "conflict_information": 0.2,
-                                  "problem_importance": 0.2
+        NodeRole.Critic: {"emotional_response": 0.0, 
+                                  "correctness": 0.5,
+                                  "experiential_matching": 0.05,
+                                  "conflict_information": 0.4,
+                                  "problem_importance": 0.05
                                   },
-        NodeRole.Evaluator:{"emotional_response": 0.2, 
-                                  "correctness": 0.2,
-                                  "experiential_matching": 0.2,
-                                  "conflict_information": 0.2,
-                                  "problem_importance": 0.2
+        NodeRole.Evaluator:{"emotional_response": 0.0, 
+                                  "correctness": 0.4,
+                                  "experiential_matching": 0.0,
+                                  "conflict_information": 0.3,
+                                  "problem_importance": 0.3
                                   },
         NodeRole.Generalist: {"emotional_response": 0.2, 
                                   "correctness": 0.2,
@@ -55,11 +55,11 @@ class Node:
                                   "conflict_information": 0.2,
                                   "problem_importance": 0.2
                                   },
-        NodeRole.Synthesizer:{"emotional_response": 0.2, 
-                                  "correctness": 0.2,
-                                  "experiential_matching": 0.2,
-                                  "conflict_information": 0.2,
-                                  "problem_importance": 0.2
+        NodeRole.Synthesizer:{"emotional_response": 0.0, 
+                                  "correctness": 0.25,
+                                  "experiential_matching": 0.25,
+                                  "conflict_information": 0.25,
+                                  "problem_importance": 0.25
                                   },
     }
 
@@ -155,6 +155,8 @@ class SystemTwo:
         role_responses: list[NodeResponse] = []
         previous_response = system_one_response
         previous_role = "system one"
+        synthesizer_response: str | None = None
+        synthesizer_msv: MetacognitiveVector | None = None
         for role, node in self.taken_roles.items():
             if node:
                 node_response = node.get_response(user_prompt, 
@@ -167,21 +169,27 @@ class SystemTwo:
                                                      node_response, 
                                                      previous_response)
                 role_responses.append(NodeResponse(node_role=role, node_response=node_response, node_msv=state))
+                if role == NodeRole.Synthesizer:
+                    synthesizer_response = node_response
+                    synthesizer_msv = state
+
                 previous_response = node_response
                 previous_role = role
                 messages.append({"role": "assistant", "content": node_response})
-        
-        messages.append(
-                    {"role": "user", 
-                     "content": prompts.get_prompt(PromptNames.System_Two_User, 
-                                                   context={"user_prompt": user_prompt})})
-        
-        overall_system_two_response = ollama.chat(model="llama3.2", messages=messages).message.content
-
-        state = await compute_metacognitive_state_vector(prompts,
-                                                     weights, 
-                                                     overall_system_two_response, 
-                                                     system_one_response)
+        if not synthesizer_response:
+            messages.append(
+                        {"role": "user", 
+                        "content": prompts.get_prompt(PromptNames.System_Two_User, 
+                                                    context={"user_prompt": user_prompt})})
+            
+            overall_system_two_response = ollama.chat(model="llama3.2", messages=messages).message.content
+            state = await compute_metacognitive_state_vector(prompts,
+                                                weights, 
+                                                overall_system_two_response, 
+                                                system_one_response)
+        else:
+            overall_system_two_response = synthesizer_response
+            state = synthesizer_msv
         
         return SystemTwoResponse(node_responses=role_responses, 
                                  system_two_response=overall_system_two_response, 
