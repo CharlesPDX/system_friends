@@ -1,5 +1,5 @@
 import argparse
-from collections import defaultdict
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -158,14 +158,22 @@ def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
     return id
 
 prompts = Prompts()
+history = deque(maxlen=10)
 
 async def run_system_one(user_input:str) -> tuple[str, str]:
     try:
         global prompts
         global weights
+        
         # Generate a response from the system one model and compute the metacognative state vector
-        response = await system_one_model.get_response(user_input)
-        state = await compute_metacognitive_state_vector(prompts, weights, response, user_input)
+        response = await system_one_model.get_response(user_input, list(history))
+        historical_info = "\n".join([message["content"] for message in history if message["role"]=="assistant"])
+        state = await compute_metacognitive_state_vector(prompts=prompts, 
+                                                         weights=weights, 
+                                                         response=response, 
+                                                         original_prompt=user_input,
+                                                         knowledge_base=historical_info,
+                                                         historical_responses=historical_info,)
         
         parsed_response = system_two_model.SystemTwoResponse(system_two_response=None, metacognitive_vector=None, node_responses=None)
         if state.should_engage_system_two():
@@ -186,8 +194,11 @@ async def run_system_one(user_input:str) -> tuple[str, str]:
                                 system_two_response=parsed_response.system_two_response,
                                 system_two_msv=parsed_response.metacognitive_vector)
         id = save_msv_state(state, parsed_response.metacognitive_vector)
-        
-        return (parsed_response.system_two_response if parsed_response.system_two_response else response, id)
+        history.append({"role": "user", "content": user_input})
+        system_response = (parsed_response.system_two_response if parsed_response.system_two_response else response, id)
+        history.append({"role": "assistant", "content": system_response[0]})
+
+        return system_response
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
