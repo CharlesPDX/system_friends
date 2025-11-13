@@ -10,7 +10,3 @@ class SystemTwoRequest(BaseModel):
     prompts: Prompts
     weights: dict[str, dict[str, float]]
 
-
-class SystemTwoResponse(BaseModel):
-    system_two_response: str | None
-    metacognitive_vector: MetacognitiveVector | None

@@ -75,6 +75,15 @@
                     {% endfor %}
                 {% endfor %}
             </div>
+            <div>
+                {% autoescape false %}
+                    {{system_two_graph[0]}}
+                    {{system_two_graph[1]}}
+                {% endautoescape %}
+                <div id="node-info">
+                    <em>Click on a node to see details...</em>
+                </div>
+            </div>
         </div>
     </div>
   </div>
