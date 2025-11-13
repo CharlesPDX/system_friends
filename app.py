@@ -64,6 +64,8 @@ async def chat(request: Request, user_input: str = Form(...)):
 
 
 msv_state: defaultdict[str, list[MetacognitiveVector]] = defaultdict(list)
+system_two_state: dict[str, system_two_model.SystemTwoResponse] = {}
+selected_nodes: list[system_two_model.NodeResponse] = []
 
 
 class ChartNames(StrEnum):
@@ -148,7 +150,8 @@ async def get_chart(request: Request, id: str = None):
                 }
             )
             msv_graphs.append(parts)
-    plot = create_system_two_node_graph()
+    global selected_nodes
+    plot, selected_nodes = create_system_two_node_graph(system_two_state[id])
     system_two_graph_components = components(plot)
     return templates.TemplateResponse(
         request=request,
@@ -164,36 +167,12 @@ async def get_chart(request: Request, id: str = None):
 @app.get("/node/{node_id}", response_class=HTMLResponse)
 async def node_detail(node_id: int):
     """HTMX endpoint for node details"""
-    node_info = {
-        0: {
-            "name": "Node 0",
-            "description": "This is node 0 in the graph",
-            "properties": "Connected to Nodes 1, 3",
-        },
-        1: {
-            "name": "Node 1",
-            "description": "This is node 1 in the graph",
-            "properties": "Connected to Nodes 0, 2, 3",
-        },
-        2: {
-            "name": "Node 2",
-            "description": "This is node 2 in the graph",
-            "properties": "Connected to Nodes 1, 3",
-        },
-        3: {
-            "name": "Node 3",
-            "description": "This is node 3 in the graph",
-            "properties": "Connected to Nodes 0, 1, 2",
-        },
-    }
-
-    info = node_info.get(node_id, {"name": "Unknown", "description": "Node not found"})
+    info = selected_nodes[node_id]
 
     return f"""
     <div class="node-detail">
-        <h3>{info['name']}</h3>
-        <p><strong>Description:</strong> {info['description']}</p>
-        <p><strong>Properties:</strong> {info.get('properties', 'N/A')}</p>
+        <p><strong>Role:</strong> {info.node_role}</p>
+        <p><strong>Response:</strong> {info.node_response}</p>
         <p><em>Node ID: {node_id}</em></p>
     </div>
     """
@@ -318,6 +297,7 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
                 system_two_msv=parsed_response.metacognitive_vector,
             )
         id = save_msv_state(state, parsed_response.metacognitive_vector)
+        system_two_state[id] = parsed_response
         history.append({"role": "user", "content": user_input})
         system_response = (
             (
@@ -376,6 +356,7 @@ async def reset_system(configuration: dict[str, dict[str, Any]] | None = None) -
         f"data/{formatted_datetime}.sqlite3", current_configuration
     )
     msv_state.clear()
+    system_two_state.clear()
     history.clear()
 
     if created:
