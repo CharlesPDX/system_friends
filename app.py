@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -11,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 from bokeh.embed import components
+from bokeh.models import ColumnDataSource
 from bokeh.plotting import figure
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -205,23 +207,117 @@ def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
     return weights
 
 
+# def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:
+#     categories: list[str] = list(data.keys())
+#     values: list[float] = list(data.values())
+#     p = figure(
+#         x_range=categories,
+#         # All vectors are on the 0-100 interval
+#         y_range=(0, 100),
+#         title=chart_title,
+#         toolbar_location=None,
+#         tools="",
+#     )
+#     p.vbar(x=categories, top=values, width=0.9)
+
+#     p.xgrid.grid_line_color = None
+#     p.y_range.start = 0
+#     p.xaxis.axis_label = x_label
+#     p.yaxis.axis_label = "Values"
+#     return p
+
+
 def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:
-    categories: list[str] = list(data.keys())
+    categories: list[str] = [
+        k.replace("_", " ")
+        .title()
+        .replace(" ", "\x00", 1)
+        .replace(" ", "\n", 1)
+        .replace("\x00", " ")
+        for k in data.keys()
+    ]
+    # categories: list[str] = list([k.replace("_", " ").title() for k in data.keys()])
     values: list[float] = list(data.values())
+
+    num_vars = len(categories)
+
+    # Calculate angles for each axis (in radians)
+    angles = [i * 2 * math.pi / num_vars for i in range(num_vars)]
+    angles.append(angles[0])  # Close the polygon
+
+    # Close the values list to complete the polygon
+    closed_values = values + [values[0]]
+
+    # Convert polar coordinates to cartesian
+    max_val = 100  # Your data is on 0-100 scale
+    x = [val * math.cos(angle) for val, angle in zip(closed_values, angles)]
+    y = [val * math.sin(angle) for val, angle in zip(closed_values, angles)]
+
+    # Create axis lines from center to perimeter
+    axis_x = [[0, max_val * math.cos(angle)] for angle in angles[:-1]]
+    axis_y = [[0, max_val * math.sin(angle)] for angle in angles[:-1]]
+
+    # Position labels outside the chart
+    label_distance = max_val * 1.15
+    label_x = [label_distance * math.cos(angle) for angle in angles[:-1]]
+    label_y = [label_distance * math.sin(angle) for angle in angles[:-1]]
+
+    # Create data sources
+    polygon_source = ColumnDataSource(data=dict(x=x, y=y))
+    axis_source = ColumnDataSource(data=dict(xs=axis_x, ys=axis_y))
+    label_source = ColumnDataSource(data=dict(x=label_x, y=label_y, text=categories))
+
+    # Create figure
     p = figure(
-        x_range=categories,
-        # All vectors are on the 0-100 interval
-        y_range=(0, 100),
+        width=500,
+        height=500,
         title=chart_title,
         toolbar_location=None,
         tools="",
+        match_aspect=True,
+        x_range=(-max_val * 1.7, max_val * 1.7),
+        y_range=(-max_val * 1.7, max_val * 1.7),
     )
-    p.vbar(x=categories, top=values, width=0.9)
 
-    p.xgrid.grid_line_color = None
-    p.y_range.start = 0
-    p.xaxis.axis_label = x_label
-    p.yaxis.axis_label = "Values"
+    # Hide axes and grid
+    p.xaxis.visible = False
+    p.yaxis.visible = False
+    p.xgrid.visible = False
+    p.ygrid.visible = False
+
+    # Draw axis lines (spokes)
+    p.multi_line(xs="xs", ys="ys", source=axis_source, color="#cccccc", line_width=1)
+
+    # Draw concentric circles for reference (optional)
+    circle_radii = [25, 50, 75, 100]
+    for radius in circle_radii:
+        circle_angles = [i * 2 * math.pi / 100 for i in range(101)]
+        circle_x = [radius * math.cos(a) for a in circle_angles]
+        circle_y = [radius * math.sin(a) for a in circle_angles]
+        p.line(circle_x, circle_y, color="#eeeeee", line_width=1, alpha=0.5)
+
+    # Draw the data polygon
+    p.patch(
+        x="x",
+        y="y",
+        source=polygon_source,
+        alpha=0.3,
+        color="#3298dc",
+        line_color="#2366d1",
+        line_width=2,
+    )
+
+    # Add category labels
+    p.text(
+        x="x",
+        y="y",
+        text="text",
+        source=label_source,
+        text_align="center",
+        text_baseline="middle",
+        text_font_size="10pt",
+    )
+
     return p
 
 
