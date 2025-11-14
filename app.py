@@ -83,6 +83,7 @@ class ChartNames(StrEnum):
 async def get_chart(request: Request, id: str = None):
     msv_response = []
     msv_graphs = []
+    system_two_graph_components = ("", "")
 
     if id:
         for system_number, msv in enumerate(msv_state.get(id, [])):
@@ -152,9 +153,12 @@ async def get_chart(request: Request, id: str = None):
                 }
             )
             msv_graphs.append(parts)
-    global selected_nodes
-    plot, selected_nodes = create_system_two_node_graph(system_two_state[id])
-    system_two_graph_components = components(plot)
+            if system_number == 1:
+                global selected_nodes
+                plot, selected_nodes = create_system_two_node_graph(
+                    system_two_state[id]
+                )
+                system_two_graph_components = components(plot)
     return templates.TemplateResponse(
         request=request,
         name="msv_visualizer.html",
@@ -173,7 +177,7 @@ async def node_detail(node_id: int):
 
     return f"""
     <div class="node-detail">
-        <p><strong>Role:</strong> {info.node_role}</p>
+        <p><strong>Role:</strong> {info.node_role.replace("_", " ").title()}</p>
         <p><strong>Response:</strong> {info.node_response}</p>
         <p><em>Node ID: {node_id}</em></p>
     </div>

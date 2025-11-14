@@ -45,9 +45,9 @@ def create_system_two_node_graph(
     plot = figure(
         width=600,
         height=400,
-        x_range=(-3, 3),
+        x_range=(-1, len(system_two_nodes) + 0.025),
         y_range=(-3, 3),
-        title="Interactive Graph",
+        title="System Two Internal Roles",
         tools="tap,pan,wheel_zoom,reset",
     )
 
@@ -61,7 +61,7 @@ def create_system_two_node_graph(
     graph.node_renderer.data_source.data = dict(
         index=list(range(len(system_two_nodes))),
         name=[
-            node.node_role for node in system_two_nodes
+            node.node_role.replace("_", " ").title() for node in system_two_nodes
         ],  # Extract string from Pydantic model
         node_response=[
             node.node_response for node in system_two_nodes
@@ -85,12 +85,23 @@ def create_system_two_node_graph(
     graph.edge_renderer.data_source.data = dict(start=edge_start, end=edge_end)
 
     # Use spring layout for automatic positioning
-    graph_layout_nodes = nx.spring_layout(G, scale=2, seed=42)
-    # graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
-    # Convert node object keys to integer indices for Bokeh
-    graph_layout = {
-        node_to_index[node]: pos for node, pos in graph_layout_nodes.items()
-    }
+    # graph_layout_nodes = nx.spring_layout(G, scale=2, seed=42)
+    # # graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
+    # # Convert node object keys to integer indices for Bokeh
+    # graph_layout = {
+    #     node_to_index[node]: pos for node, pos in graph_layout_nodes.items()
+    # }
+
+    # use linear layout for now, to match the system 2 process
+    graph_layout = {}
+    x_spacing = 1.0  # Adjust this to control horizontal spacing between nodes
+
+    for i, node in enumerate(system_two_nodes):
+        node_idx = node_to_index[node]
+        graph_layout[node_idx] = (
+            i * x_spacing,
+            0,
+        )  # All nodes at y=0, spaced horizontally
     graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
 
     # Style nodes

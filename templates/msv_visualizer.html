@@ -71,18 +71,22 @@
                         {% else %}
                             {% set class = 'tab-item hidden' %}
                         {% endif %}
-                        <div class="{{class}}" id="tab{{outer_loop.index}}-subtab{{loop.index}}">{% autoescape false %}{{graph}}{% endautoescape %}</div>
+                        <div class="{{class}}" id="tab{{outer_loop.index}}-subtab{{loop.index}}">
+                            {% autoescape false %}{{graph}}{% endautoescape %}
+                            {% if outer_loop.index == 2 and loop.index == 1%}
+                                <div>
+                                    {% autoescape false %}
+                                        {{system_two_graph[0]}}
+                                        {{system_two_graph[1]}}
+                                    {% endautoescape %}
+                                    <div id="node-info">
+                                        <em>Click on a node to see details...</em>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
                     {% endfor %}
                 {% endfor %}
-            </div>
-            <div>
-                {% autoescape false %}
-                    {{system_two_graph[0]}}
-                    {{system_two_graph[1]}}
-                {% endautoescape %}
-                <div id="node-info">
-                    <em>Click on a node to see details...</em>
-                </div>
             </div>
         </div>
     </div>
