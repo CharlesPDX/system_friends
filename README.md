@@ -66,12 +66,27 @@ pip install -r requirements.txt
 
 # Install text blob corpora
 python -m textblob.download_corpora
+```
 
-# Run System One
-python3 app.py --system-two-url http://127.0.0.1:8001
+### Required Dependencies
 
-# Run System Two (in a different terminal tab, rember to activate the same virtual environment)
-python3 app.py --system-two
+- `fastapi` - Web framework
+- `uvicorn` - ASGI server
+- `httpx` - HTTP client for System 2 requests
+- `bokeh` - Interactive visualization
+- `Jinja2` - Template engine
+- `NRCLex` - measure emotional affect from a body of text
+- `ollama` - Ollama Python client
+- `pydantic` - Object serialization & validation
+
+## Usage
+
+```bash
+# Terminal 1 - System 1 (primary interface)
+python app.py --system-two-url http://localhost:8001
+
+# Terminal 2 - System 2 (reasoning engine)
+python app.py --system-two
 
 # Open a browser tab to http://localhost:8000 - you should get the demo page
 
@@ -84,39 +99,24 @@ python3 app.py --system-two
 # You can see the parameters the interactions are running with from the parameters table, and the interactions (System One and Two MSVs and responses along with the user input) from the interactions table.
 ```
 
-### Required Dependencies
-
-- `fastapi` - Web framework
-- `uvicorn` - ASGI server
-- `httpx` - HTTP client for System 2 requests
-- `bokeh` - Interactive visualization
-- `jinja2` - Template engine
-
-## Usage
-
-```bash
-# Terminal 1 - System 1 (primary interface)
-python main.py --system-two --system-two-url http://localhost:8001
-
-# Terminal 2 - System 2 (reasoning engine)
-python main.py --system-two
-```
-
 ## Project Structure
 
 ```
-├── main.py                          # FastAPI application and routing
+├── app.py                           # FastAPI application and routing
 ├── system_one_model.py              # Quick response generation
 ├── system_two_model.py              # Deliberative reasoning
 ├── metacognitive.py                 # MSV calculation logic
 ├── prompts.py                       # System prompts configuration
 ├── history.py                       # Database interaction tracking
+├── system_communication_objects.py  # Object to make System 2 request from System 1
 ├── app_graph.py                     # System 2 node graph visualization
 ├── templates/
 │   ├── admin_panel.html             # Admin interface to adjust weights & prompts
 │   ├── index.html                   # Main chat interface
 │   └── msv_visualizer.html          # Chart visualization template
-├── static/                          # Static assets (CSS, JS)
+├── experiment_harness.py            # Command Line Interface to run multiple experiments on the overall system unattended/non-interactively
+├── experiment_model.py              # Pydantic models for experiment harness
+├── static/                          # Static assets (Vendored CSS, JS)
 └── data/                            # SQLite session databases
 ```
 
@@ -128,7 +128,7 @@ python main.py --system-two
 - `POST /chat` - Submit user message and receive response
 - `GET /get_chart?id={id}` - Retrieve MSV visualizations for a response
 - `GET /node/{node_id}` - Get details for System 2 reasoning nodes
-- `POST /reset` - Reset conversation with a new configuration
+- `POST /reset` - Reset conversation history and optionally supply new configuration
 
 ### System Endpoints
 
@@ -160,7 +160,7 @@ The system provides multiple visualization types:
 2. **Component Vectors** - Individual dimension breakdowns (5 charts)
 3. **System 2 Node Graph** - Interactive reasoning process visualization
 
-All charts use radar plot format for multi-dimensional data representation.
+All Vector charts use radar plot format for multi-dimensional data representation.
 
 ## Development
 
@@ -168,7 +168,7 @@ All charts use radar plot format for multi-dimensional data representation.
 
 1. Define new sub-components in `metacognitive.py`
 2. Update weight initialization in `get_weights()`
-3. Add visualization in `_generate_chart()`
+3. Add visualization in `get_chart()`
 
 ### Extending System 2
 
@@ -181,21 +181,6 @@ All charts use radar plot format for multi-dimensional data representation.
 - `--system-two`: Run as System 2 instance (listening mode)
 - `--system-two-url`: URL of System 2 instance (when running System 1)
 
-## License
-
-[Add your license here]
-
-## Contributing
-
-[Add contribution guidelines here]
-
-## Citation
-
-If you use this system in research, please cite:
-
-```
-[Add citation information]
-```
 
 ## Acknowledgments
 
