@@ -190,11 +190,11 @@ class MetacognitiveVector(ResponseVectors):
     problem_importance: ProblemImportance
     weight_problem_importance: float = 0.2
 
-    _activation_threshold: float = 0.1
+    activation_threshold: float = 0.1
 
     def should_engage_system_two(self) -> bool:
         activation_value = self._activation_function(self.calculated_value)
-        return activation_value >= self._activation_threshold
+        return activation_value >= self.activation_threshold
 
     def _activation_function(self, value: int) -> float:
         return 1 / (1 + math.exp(-value * 0.00001))

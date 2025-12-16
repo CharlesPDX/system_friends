@@ -1,10 +1,60 @@
 <!-- config_form.html - Jinja2 template to be included in other templates -->
+<style>
+    .config-section-box {
+        background: #f7fafc;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .config-section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .config-section-title::before {
+        content: '●';
+        color: #667eea;
+        font-size: 1.2rem;
+    }
+    
+    .config-submit-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .config-submit-gradient:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+</style>
+
 <div class="card">
     <div class="card-content">
         <h1 class="title is-3">System Configuration</h1>
         <p class="subtitle is-6 has-text-grey">Configure weights and prompts for the system</p>
         
         <form id="configForm">
+            <!-- System Two trigger threshold -->
+            <div class="config-section-box">
+                <h2 class="title is-5 config-section-title">Overall Configuration</h2>
+                <div class="columns is-multiline">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Activation Threshold</label>
+                            <div class="control">
+                                <input class="input" type="number" id="activation_threshold" step="0.01" min="0" max="1" value="{{ weights_and_prompts['msv_weights']['activation_threshold'] }}" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- MSV Weights -->
             <div class="config-section-box">
                 <h2 class="title is-5 config-section-title">MSV Weights</h2>
@@ -294,13 +344,72 @@
                         <textarea class="textarea" id="system_two_user_prompt">{{ weights_and_prompts['prompts']['system_two_user_prompt'] }}</textarea>
                     </div>
                 </div>
+                <div class="field">
+                    <label class="label">Domain Expert System</label>
+                    <div class="control">
+                        <textarea class="textarea" id="domain_expert_system">{{ weights_and_prompts['prompts']['domain_expert_system'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Domain Expert User</label>
+                    <div class="control">
+                        <textarea class="textarea" id="domain_expert_user">{{ weights_and_prompts['prompts']['domain_expert_user'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Critic System</label>
+                    <div class="control">
+                        <textarea class="textarea" id="critic_system">{{ weights_and_prompts['prompts']['critic_system'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Critic User</label>
+                    <div class="control">
+                        <textarea class="textarea" id="critic_user">{{ weights_and_prompts['prompts']['critic_user'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Evaluator System</label>
+                    <div class="control">
+                        <textarea class="textarea" id="evaluator_system">{{ weights_and_prompts['prompts']['evaluator_system'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Evaluator User</label>
+                    <div class="control">
+                        <textarea class="textarea" id="evaluator_user">{{ weights_and_prompts['prompts']['evaluator_user'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Generalist System</label>
+                    <div class="control">
+                        <textarea class="textarea" id="generalist_system">{{ weights_and_prompts['prompts']['generalist_system'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Generalist User</label>
+                    <div class="control">
+                        <textarea class="textarea" id="generalist_user">{{ weights_and_prompts['prompts']['generalist_user'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Synthesizer System</label>
+                    <div class="control">
+                        <textarea class="textarea" id="synthesizer_system">{{ weights_and_prompts['prompts']['synthesizer_system'] }}</textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Synthesizer User</label>
+                    <div class="control">
+                        <textarea class="textarea" id="synthesizer_user">{{ weights_and_prompts['prompts']['synthesizer_user'] }}</textarea>
+                    </div>
+                </div>
             </div>
 
-            <div class="field">
+           <div class="field">
                 <div class="control">
                     <button type="button" 
                             class="button is-fullwidth is-large is-primary config-submit-gradient has-text-weight-semibold"
-                            type="submit"
                             hx-post="/reset"
                             hx-ext='json-enc'
                             hx-vars="js:{...getFormData()}"
@@ -318,6 +427,7 @@
 </div>
 
 <script>
+    // Function to get form data as JSON string
     function getFormData() {
         return {
             msv_weights: {
@@ -325,7 +435,8 @@
                 weight_correctness: parseFloat(document.getElementById('weight_correctness').value),
                 weight_experiential_matching: parseFloat(document.getElementById('weight_experiential_matching').value),
                 weight_conflict_information: parseFloat(document.getElementById('weight_conflict_information').value),
-                weight_problem_importance: parseFloat(document.getElementById('weight_problem_importance').value)
+                weight_problem_importance: parseFloat(document.getElementById('weight_problem_importance').value),
+                activation_threshold: parseFloat(document.getElementById('activation_threshold').value)
             },
             emotional_response: {
                 weight_fear: parseFloat(document.getElementById('weight_fear').value),
@@ -364,7 +475,17 @@
                 conflict_information_prompt: document.getElementById('conflict_information_prompt').value,
                 problem_importance_prompt: document.getElementById('problem_importance_prompt').value,
                 system_two_system_prompt: document.getElementById('system_two_system_prompt').value,
-                system_two_user_prompt: document.getElementById('system_two_user_prompt').value
+                system_two_user_prompt: document.getElementById('system_two_user_prompt').value,
+                domain_expert_system: document.getElementById('domain_expert_system').value,
+                domain_expert_user: document.getElementById('domain_expert_user').value,
+                critic_system: document.getElementById('critic_system').value,
+                critic_user: document.getElementById('critic_user').value,
+                evaluator_system: document.getElementById('evaluator_system').value,
+                evaluator_user: document.getElementById('evaluator_user').value,
+                generalist_system: document.getElementById('generalist_system').value,
+                generalist_user: document.getElementById('generalist_user').value,
+                synthesizer_system: document.getElementById('synthesizer_system').value,
+                synthesizer_user: document.getElementById('synthesizer_user').value
             }
         }
     }
