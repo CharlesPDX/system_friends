@@ -246,7 +246,9 @@ def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
         ("problem_importance", msv.problem_importance),
     ):
         weights[x[0]] = {
-            k: v for k, v in asdict(x[1]).items() if k.startswith("weight")
+            k: v
+            for k, v in asdict(x[1]).items()
+            if k.startswith("weight") or k == "activation_threshold"
         }
     return weights
 
