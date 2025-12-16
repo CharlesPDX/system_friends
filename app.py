@@ -83,6 +83,7 @@ class ChartNames(StrEnum):
 async def get_chart(request: Request, id: str = None):
     msv_response = []
     msv_graphs = []
+    msv_bar_graphs = []
     system_two_graph_components = ("", "")
 
     if id:
@@ -141,6 +142,33 @@ async def get_chart(request: Request, id: str = None):
                 f"{system_label} Problem Importance Vector",
             )
 
+            bar_msv_components_chart = _generate_bar_chart(
+                data, "MSV Components", f"{system_label} MSV"
+            )
+            bar_emotion_chart = _generate_bar_chart(
+                emotional_data, "Emotion Components", f"{system_label} Emotion Vector"
+            )
+            bar_correctness_chart = _generate_bar_chart(
+                correctness_data,
+                "Correctness Components",
+                f"{system_label} Correctness Vector",
+            )
+            bar_experiential_chart = _generate_bar_chart(
+                experiential_matching_data,
+                "Experiential Components",
+                f"{system_label} Experiential Vector",
+            )
+            bar_conflict_chart = _generate_bar_chart(
+                conflict_information_data,
+                "Conflict Components",
+                f"{system_label} Conflict Vector",
+            )
+            bar_problem_importance_chart = _generate_bar_chart(
+                problem_importance_data,
+                "Problem Importance Components",
+                f"{system_label} Problem Importance Vector",
+            )
+
             # Generate the plots' HTML
             parts = components(
                 {
@@ -152,7 +180,18 @@ async def get_chart(request: Request, id: str = None):
                     ChartNames.problem_importance.value: problem_importance_chart,
                 }
             )
+            bar_parts = components(
+                {
+                    ChartNames.overall_msv.value: bar_msv_components_chart,
+                    ChartNames.emotional_response.value: bar_emotion_chart,
+                    ChartNames.correctness.value: bar_correctness_chart,
+                    ChartNames.experiential_matching.value: bar_experiential_chart,
+                    ChartNames.conflict_information.value: bar_conflict_chart,
+                    ChartNames.problem_importance.value: bar_problem_importance_chart,
+                }
+            )
             msv_graphs.append(parts)
+            msv_bar_graphs.append(bar_parts)
             if system_number == 1:
                 global selected_nodes
                 plot, selected_nodes = create_system_two_node_graph(
@@ -165,6 +204,7 @@ async def get_chart(request: Request, id: str = None):
         context={
             "msv_graphs": msv_graphs,
             "msv_json": msv_response,
+            "msv_bar_graphs": msv_bar_graphs,
             "system_two_graph": system_two_graph_components,
         },
     )
@@ -211,24 +251,33 @@ def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
     return weights
 
 
-# def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:
-#     categories: list[str] = list(data.keys())
-#     values: list[float] = list(data.values())
-#     p = figure(
-#         x_range=categories,
-#         # All vectors are on the 0-100 interval
-#         y_range=(0, 100),
-#         title=chart_title,
-#         toolbar_location=None,
-#         tools="",
-#     )
-#     p.vbar(x=categories, top=values, width=0.9)
+def _generate_bar_chart(
+    data: dict[str, float], x_label: str, chart_title: str
+) -> figure:
+    categories: list[str] = [
+        k.replace("_", " ")
+        .title()
+        .replace(" ", "\x00", 1)
+        .replace(" ", "\n", 1)
+        .replace("\x00", " ")
+        for k in data.keys()
+    ]
+    values: list[float] = list(data.values())
+    p = figure(
+        x_range=categories,
+        # All vectors are on the 0-100 interval
+        y_range=(0, 100),
+        title=chart_title,
+        toolbar_location=None,
+        tools="",
+    )
+    p.vbar(x=categories, top=values, width=0.9)
 
-#     p.xgrid.grid_line_color = None
-#     p.y_range.start = 0
-#     p.xaxis.axis_label = x_label
-#     p.yaxis.axis_label = "Values"
-#     return p
+    p.xgrid.grid_line_color = None
+    p.y_range.start = 0
+    p.xaxis.axis_label = x_label
+    p.yaxis.axis_label = "Values"
+    return p
 
 
 def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:

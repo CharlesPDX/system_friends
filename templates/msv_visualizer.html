@@ -64,8 +64,9 @@
                 {% set outer_loop = loop %}
                     {% autoescape false %}
                     {{item[0]}}
+                    {{msv_bar_graphs[outer_loop.index0][0]}}
                     {% endautoescape %}
-                    {% for graph in item[1].values() %}
+                    {% for graph_key, graph in item[1].items() %}
                         {% if loop.first %}
                             {% set class = 'tab-item' %}
                         {% else %}
@@ -73,6 +74,7 @@
                         {% endif %}
                         <div class="{{class}}" id="tab{{outer_loop.index}}-subtab{{loop.index}}">
                             {% autoescape false %}{{graph}}{% endautoescape %}
+                            {% autoescape false %}{{msv_bar_graphs[outer_loop.index0][1][graph_key]}}{% endautoescape %}
                             {% if outer_loop.index == 2 and loop.index == 1%}
                                 <div>
                                     {% autoescape false %}
