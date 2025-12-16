@@ -23,7 +23,7 @@
     <script src="{{ url_for('static', path='bokeh-mathjax-3.8.0.min.js') }}"></script>
     <script src="{{ url_for('static', path='json-enc.js') }}"></script>
 
-        <style>
+    <style>
         /* Basic Styles for tabs */
         .tab-content {
             margin-top: 20px;
@@ -31,11 +31,6 @@
         .hidden {
             display: none;
         }
-        /* body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem 1rem;
-        } */
         
         .main-container {
             max-width: 1000px;
@@ -79,38 +74,50 @@
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-    .config-section-box {
-        background: #f7fafc;
-        border-radius: 8px;
-        border-left: 4px solid #667eea;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-    
-    .config-section-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 1.5rem;
-    }
-    
-    .config-section-title::before {
-        content: '●';
-        color: #667eea;
-        font-size: 1.2rem;
-    }
-    
-    .config-submit-gradient {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border: none;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    
-    .config-submit-gradient:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
+        .config-section-box {
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .config-section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .config-section-title::before {
+            content: '●';
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+        
+        .config-submit-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .config-submit-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        #node-info {
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            min-height: 50px;
+            background-color: #f9f9f9;
+        }
+        .node-detail {
+            font-size: 16px;
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -138,6 +145,9 @@
                             </div>
                         </div>
                     </form>
+                    <p><em>Demo is intended for single user environments, if on a multi-user environment responses and contexts may be crossed and leaked between sessions.<br/>
+                        Do not use for production.<br/>
+                        Do not reveal sensitive information, chats may be logged.<br/></em></p>
                     <div class="control">
                         <button class="button is-info" type="submit" hx-post="/reset" hx-swap="none">Reset</button>
                     </div>
