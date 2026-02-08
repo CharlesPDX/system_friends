@@ -30,7 +30,7 @@ def run_experiments(url: str, experiments: Experiments):
     for experiment in experiments.experiments:
         experiment_id = experiment.id
         utc_experiment_start = datetime.now(timezone.utc)
-        configuration: str | None = (
+        configuration: dict | None = (
             experiment.configuration.model_dump() if experiment.configuration else None
         )
         reset_response = requests.post(f"{url}/reset", json=configuration)
