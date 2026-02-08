@@ -25,6 +25,7 @@ from app_graph import create_system_two_node_graph
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import (
+    MetacognitiveActivationComputation,
     MetacognitiveVector,
     MetacognitiveVectorComputation,
     generate_empty_msv,
@@ -93,8 +94,8 @@ async def get_chart(request: Request, id: str = None):
                 json.dumps(
                     asdict(msv)
                     | {
-                        "activation_result": msv._activation_function(
-                            msv.calculated_value
+                        "activation_result": MetacognitiveActivationComputation.get_activation_result(
+                            "baseline", msv
                         )
                     },
                     indent=2,
@@ -246,9 +247,7 @@ def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
         ("problem_importance", msv.problem_importance),
     ):
         weights[x[0]] = {
-            k: v
-            for k, v in asdict(x[1]).items()
-            if k.startswith("weight") or k == "activation_threshold"
+            k: v for k, v in asdict(x[1]).items() if k.startswith("weight")
         }
     return weights
 
@@ -423,7 +422,9 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
         parsed_response = system_two_model.SystemTwoResponse(
             system_two_response=None, metacognitive_vector=None, node_responses=None
         )
-        if state.should_engage_system_two():
+        if MetacognitiveActivationComputation.should_engage_system_two(
+            "baseline", state
+        ):
             system_two_response = httpx.post(
                 f"{app_args.system_two_url}/system2",
                 content=SystemTwoRequest(

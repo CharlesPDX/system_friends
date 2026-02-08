@@ -3,6 +3,7 @@ import json
 import math
 from abc import abstractmethod
 from dataclasses import dataclass, fields
+from typing import Self
 
 import ollama
 from nrclex import NRCLex
@@ -174,7 +175,7 @@ class ProblemImportance(ResponseVectors):
 
 @dataclass(kw_only=True, unsafe_hash=True)
 class MetacognitiveVector(ResponseVectors):
-    version: str = "0.1"
+    version: str = "0.11"
     emotional_response: EmotionalResponse
     weight_emotional_response: float = 0.2
 
@@ -189,15 +190,6 @@ class MetacognitiveVector(ResponseVectors):
 
     problem_importance: ProblemImportance
     weight_problem_importance: float = 0.2
-
-    activation_threshold: float = 0.1
-
-    def should_engage_system_two(self) -> bool:
-        activation_value = self._activation_function(self.calculated_value)
-        return activation_value >= self.activation_threshold
-
-    def _activation_function(self, value: int) -> float:
-        return 1 / (1 + math.exp(-value * 0.00001))
 
     def _compute_value(self) -> int:
         return int(
@@ -216,6 +208,73 @@ class MetacognitiveVector(ResponseVectors):
                 * self.weight_problem_importance
             )
         )
+
+
+class MetacognitiveActivationComputation:
+    # Set by subclasses to register
+    compute_method: str | None = None
+
+    _registry: dict[str, "MetacognitiveActivationComputation"] = {}
+    _instances: dict[str, Self] = {}
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if cls.compute_method is None:
+            raise ValueError("Expected subclass to set compute_method")
+        cls._registry[cls.compute_method] = cls
+
+    @classmethod
+    def should_engage_system_two(
+        cls, compute_method: str, metacognitive_vector: MetacognitiveVector
+    ) -> bool:
+        if compute_method not in cls._registry:
+            raise KeyError(f"No subclass registered with key '{compute_method}'")
+        if compute_method not in cls._instances:
+            cls._instances[compute_method] = cls._registry[compute_method]()
+        return cls._instances[compute_method]._should_engage_system_two(
+            metacognitive_vector
+        )
+
+    @classmethod
+    def get_activation_result(
+        cls, compute_method: str, metacognitive_vector: MetacognitiveVector
+    ) -> str:
+        if compute_method not in cls._registry:
+            raise KeyError(f"No subclass registered with key '{compute_method}'")
+        if compute_method not in cls._instances:
+            cls._instances[compute_method] = cls._registry[compute_method]()
+        return cls._instances[compute_method]._get_activation_result(
+            metacognitive_vector
+        )
+
+    @abstractmethod
+    def _should_engage_system_two(
+        self, metacognitive_vector: MetacognitiveVector
+    ) -> bool: ...
+
+    @abstractmethod
+    def _get_activation_result(
+        self, metacognitive_vector: MetacognitiveVector
+    ) -> str: ...
+
+
+class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputation):
+    compute_method = "baseline"
+    activation_threshold: float = 0.1
+
+    def _should_engage_system_two(
+        self, metacognitive_vector: MetacognitiveVector
+    ) -> bool:
+        activation_value = self._activation_function(
+            metacognitive_vector.calculated_value
+        )
+        return activation_value >= self.activation_threshold
+
+    def _get_activation_result(self, metacognitive_vector: MetacognitiveVector) -> str:
+        return str(self._activation_function(metacognitive_vector.calculated_value))
+
+    def _activation_function(self, value: int) -> float:
+        return 1 / (1 + math.exp(-value * 0.00001))
 
 
 class MetacognitiveVectorComputation:
