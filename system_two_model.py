@@ -3,7 +3,7 @@ from enum import StrEnum, auto
 import ollama
 from pydantic import BaseModel
 
-from metacognitive import MetacognitiveVector, compute_metacognitive_state_vector
+from metacognitive import MetacognitiveVector, MetacognitiveVectorComputation
 from prompts import PromptNames, Prompts
 from system_communication_objects import SystemTwoRequest
 
@@ -193,8 +193,8 @@ class SystemTwo:
                     user_prompt, previous_response, previous_role, prompts
                 )
 
-                state = await compute_metacognitive_state_vector(
-                    prompts, weights, node_response, previous_response
+                state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+                    "baseline", prompts, weights, node_response, previous_response
                 )
                 role_responses.append(
                     NodeResponse(
@@ -222,8 +222,14 @@ class SystemTwo:
             overall_system_two_response = ollama.chat(
                 model="llama3.2", messages=messages
             ).message.content
-            state = await compute_metacognitive_state_vector(
-                prompts, weights, overall_system_two_response, system_one_response
+            state = (
+                await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+                    "baseline",
+                    prompts,
+                    weights,
+                    overall_system_two_response,
+                    system_one_response,
+                )
             )
         else:
             overall_system_two_response = synthesizer_response

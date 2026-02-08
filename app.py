@@ -26,7 +26,7 @@ from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import (
     MetacognitiveVector,
-    compute_metacognitive_state_vector,
+    MetacognitiveVectorComputation,
     generate_empty_msv,
 )
 from prompts import Prompts
@@ -410,7 +410,8 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
                 if message["role"] == "assistant"
             ]
         )
-        state = await compute_metacognitive_state_vector(
+        state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+            compute_method="baseline",
             prompts=prompts,
             weights=weights,
             response=response,

@@ -218,189 +218,261 @@ class MetacognitiveVector(ResponseVectors):
         )
 
 
-async def compute_metacognitive_state_vector(
-    prompts: Prompts,
-    weights: dict[str, dict[str, float]],
-    response: str,
-    original_prompt: str,
-    knowledge_base: str = "",
-    historical_responses: str = "",
-    sources: str = "",
-    temporal_info: str = "",
-) -> MetacognitiveVector:
-    prompts = Prompts()
-    (
-        emotional_response,
-        correctness,
-        experiential_matching,
-        conflict_information,
-        problem_importance,
-    ) = await asyncio.gather(
-        _compute_emotional_response(response, weights["emotional_response"]),
-        _compute_correctness(
-            response, original_prompt, prompts, weights["correctness"]
-        ),
-        _compute_experiential_matching(
+class MetacognitiveVectorComputation:
+
+    # Set by subclasses to register
+    compute_method: str | None = None
+
+    _registry: dict[str, "MetacognitiveVectorComputation"] = {}
+    _instances: dict[str, "MetacognitiveVectorComputation"] = {}
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        if cls.compute_method is None:
+            raise ValueError("Expected subclass to set compute_method")
+        cls._registry[cls.compute_method] = cls
+
+    @classmethod
+    async def compute_metacognitive_state_vector(
+        cls,
+        compute_method: str,
+        prompts: Prompts,
+        weights: dict[str, dict[str, float]],
+        response: str,
+        original_prompt: str,
+        knowledge_base: str = "",
+        historical_responses: str = "",
+        sources: str = "",
+        temporal_info: str = "",
+    ) -> MetacognitiveVector:
+        if compute_method not in cls._registry:
+            raise KeyError(f"No subclass registered with key '{compute_method}'")
+        if compute_method not in cls._instances:
+            cls._instances[compute_method] = cls._registry[compute_method]()
+
+        return await cls._instances[compute_method]._compute_metacognitive_state_vector(
+            prompts,
+            weights,
             response,
+            original_prompt,
             knowledge_base,
             historical_responses,
-            prompts,
-            weights["experiential_matching"],
-        ),
-        _compute_conflict_information(
-            response, sources, temporal_info, prompts, weights["conflict_information"]
-        ),
-        _compute_problem_importance(response, prompts, weights["problem_importance"]),
-    )
+            sources,
+            temporal_info,
+        )
 
-    return MetacognitiveVector(
-        emotional_response=emotional_response,
-        correctness=correctness,
-        experiential_matching=experiential_matching,
-        conflict_information=conflict_information,
-        problem_importance=problem_importance,
-        **weights["msv_weights"],
-    )
+    @abstractmethod
+    async def _compute_metacognitive_state_vector(
+        self,
+        prompts: Prompts,
+        weights: dict[str, dict[str, float]],
+        response: str,
+        original_prompt: str,
+        knowledge_base: str = "",
+        historical_responses: str = "",
+        sources: str = "",
+        temporal_info: str = "",
+    ) -> MetacognitiveVector: ...
 
 
-async def _compute_emotional_response(
-    message: str, weights: dict[str, float]
-) -> EmotionalResponse:
-    text_object = NRCLex(message)
-    # remove vestigial(?) "anticip" in favor of the populated "anticipation",
-    # seems like sometimes "anticipation" is populated sometimes "anticip" ?
-    if "anticipation" not in text_object.affect_frequencies:
-        if "anticip" in text_object.affect_frequencies:
-            text_object.affect_frequencies["anticipation"] = (
-                text_object.affect_frequencies["anticip"]
+class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
+    compute_method = "baseline"
+
+    async def _compute_metacognitive_state_vector(
+        self,
+        prompts: Prompts,
+        weights: dict[str, dict[str, float]],
+        response: str,
+        original_prompt: str,
+        knowledge_base: str = "",
+        historical_responses: str = "",
+        sources: str = "",
+        temporal_info: str = "",
+    ) -> MetacognitiveVector:
+        prompts = Prompts()
+        (
+            emotional_response,
+            correctness,
+            experiential_matching,
+            conflict_information,
+            problem_importance,
+        ) = await asyncio.gather(
+            self._compute_emotional_response(response, weights["emotional_response"]),
+            self._compute_correctness(
+                response, original_prompt, prompts, weights["correctness"]
+            ),
+            self._compute_experiential_matching(
+                response,
+                knowledge_base,
+                historical_responses,
+                prompts,
+                weights["experiential_matching"],
+            ),
+            self._compute_conflict_information(
+                response,
+                sources,
+                temporal_info,
+                prompts,
+                weights["conflict_information"],
+            ),
+            self._compute_problem_importance(
+                response, prompts, weights["problem_importance"]
+            ),
+        )
+
+        return MetacognitiveVector(
+            emotional_response=emotional_response,
+            correctness=correctness,
+            experiential_matching=experiential_matching,
+            conflict_information=conflict_information,
+            problem_importance=problem_importance,
+            **weights["msv_weights"],
+        )
+
+    async def _compute_emotional_response(
+        self, message: str, weights: dict[str, float]
+    ) -> EmotionalResponse:
+        text_object = NRCLex(message)
+        # remove vestigial(?) "anticip" in favor of the populated "anticipation",
+        # seems like sometimes "anticipation" is populated sometimes "anticip" ?
+        if "anticipation" not in text_object.affect_frequencies:
+            if "anticip" in text_object.affect_frequencies:
+                text_object.affect_frequencies["anticipation"] = (
+                    text_object.affect_frequencies["anticip"]
+                )
+            else:
+                text_object.affect_frequencies["anticipation"] = 0.0
+        del text_object.affect_frequencies["anticip"]
+        return EmotionalResponse(
+            **{k: v * 100 for k, v in text_object.affect_frequencies.items()}
+        )
+
+    async def _compute_correctness(
+        self,
+        message: str,
+        original_prompt: str,
+        prompts: Prompts,
+        weights: dict[str, float],
+    ) -> CorrectnessResponse:
+        content = prompts.get_prompt(
+            PromptNames.Correctness,
+            {"original_prompt": original_prompt, "message": message},
+        )
+        response = ollama.chat(
+            model="llama3.2", messages=[{"role": "user", "content": content}]
+        )
+        try:
+            parsed_response = json.loads(response.message.content)
+            return CorrectnessResponse(
+                logical_consistency=parsed_response["logical_consistency"],
+                factual_accuracy=int(parsed_response["factual_accuracy"]),
+                contextual_appropriateness=int(
+                    parsed_response["contextual_appropriateness"]
+                ),
+                **weights,
             )
-        else:
-            text_object.affect_frequencies["anticipation"] = 0.0
-    del text_object.affect_frequencies["anticip"]
-    return EmotionalResponse(
-        **{k: v * 100 for k, v in text_object.affect_frequencies.items()}
-    )
+        except:
+            return CorrectnessResponse(
+                logical_consistency=0.0,
+                factual_accuracy=0.0,
+                contextual_appropriateness=0.0,
+                **weights,
+            )
 
+    # Depending how to input knowledge base and historical responses, the prompt template would be different.
+    # How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
+    async def _compute_experiential_matching(
+        self,
+        message: str,
+        knowledge_base: str,
+        historical_responses: str,
+        prompts: Prompts,
+        weights: dict[str, float],
+    ) -> ExperientialMatchingResponse:
+        content = prompts.get_prompt(
+            PromptNames.Experiential_Matching,
+            {
+                "knowledge_base": knowledge_base,
+                "message": message,
+                "historical_responses": historical_responses,
+            },
+        )
+        response = ollama.chat(
+            model="llama3.2", messages=[{"role": "user", "content": content}]
+        )
+        try:
+            parsed_response = json.loads(response.message.content)
+            return ExperientialMatchingResponse(
+                knowledge_base_matching=float(
+                    parsed_response["knowledge_base_matching"]
+                ),
+                historical_responses_matching=float(
+                    parsed_response["historical_responses_matching"]
+                ),
+                **weights,
+            )
+        except:
+            return ExperientialMatchingResponse(
+                knowledge_base_matching=0.0,
+                historical_responses_matching=0.0,
+                **weights,
+            )
 
-async def _compute_correctness(
-    message: str, original_prompt: str, prompts: Prompts, weights: dict[str, float]
-) -> CorrectnessResponse:
-    content = prompts.get_prompt(
-        PromptNames.Correctness,
-        {"original_prompt": original_prompt, "message": message},
-    )
-    response = ollama.chat(
-        model="llama3.2", messages=[{"role": "user", "content": content}]
-    )
-    try:
-        parsed_response = json.loads(response.message.content)
-        return CorrectnessResponse(
-            logical_consistency=parsed_response["logical_consistency"],
-            factual_accuracy=int(parsed_response["factual_accuracy"]),
-            contextual_appropriateness=int(
-                parsed_response["contextual_appropriateness"]
-            ),
-            **weights,
+    async def _compute_conflict_information(
+        self,
+        message: str,
+        sources: str,
+        temporal_info: str,
+        prompts: Prompts,
+        weights: dict[str, float],
+    ) -> ConflictInformation:
+        content = prompts.get_prompt(
+            PromptNames.Conflict_Information,
+            {"sources": sources, "message": message, "temporal_info": temporal_info},
         )
-    except:
-        return CorrectnessResponse(
-            logical_consistency=0.0,
-            factual_accuracy=0.0,
-            contextual_appropriateness=0.0,
-            **weights,
+        response = ollama.chat(
+            model="llama3.2", messages=[{"role": "user", "content": content}]
         )
+        try:
+            parsed_response = json.loads(response.message.content)
+            return ConflictInformation(
+                internal_consistency=float(parsed_response["internal_consistency"]),
+                source_agreement=float(parsed_response["source_agreement"]),
+                temporal_stability=float(parsed_response["temporal_stability"]),
+                **weights,
+            )
+        except:
+            return ConflictInformation(
+                internal_consistency=0.0,
+                source_agreement=0.0,
+                temporal_stability=0.0,
+                **weights,
+            )
 
-
-# Depending how to input knowledge base and historical responses, the prompt template would be different.
-# How to prompt to get matching level? options: matching level [0,100], similarity [0,1]
-async def _compute_experiential_matching(
-    message: str,
-    knowledge_base: str,
-    historical_responses: str,
-    prompts: Prompts,
-    weights: dict[str, float],
-) -> ExperientialMatchingResponse:
-    content = prompts.get_prompt(
-        PromptNames.Experiential_Matching,
-        {
-            "knowledge_base": knowledge_base,
-            "message": message,
-            "historical_responses": historical_responses,
-        },
-    )
-    response = ollama.chat(
-        model="llama3.2", messages=[{"role": "user", "content": content}]
-    )
-    try:
-        parsed_response = json.loads(response.message.content)
-        return ExperientialMatchingResponse(
-            knowledge_base_matching=float(parsed_response["knowledge_base_matching"]),
-            historical_responses_matching=float(
-                parsed_response["historical_responses_matching"]
-            ),
-            **weights,
+    async def _compute_problem_importance(
+        self, original_prompt: str, prompts: Prompts, weights: dict[str, float]
+    ) -> ProblemImportance:
+        content = prompts.get_prompt(
+            PromptNames.Problem_Importance, {"original_prompt": original_prompt}
         )
-    except:
-        return ExperientialMatchingResponse(
-            knowledge_base_matching=0.0, historical_responses_matching=0.0, **weights
+        response = ollama.chat(
+            model="llama3.2", messages=[{"role": "user", "content": content}]
         )
-
-
-async def _compute_conflict_information(
-    message: str,
-    sources: str,
-    temporal_info: str,
-    prompts: Prompts,
-    weights: dict[str, float],
-) -> ConflictInformation:
-    content = prompts.get_prompt(
-        PromptNames.Conflict_Information,
-        {"sources": sources, "message": message, "temporal_info": temporal_info},
-    )
-    response = ollama.chat(
-        model="llama3.2", messages=[{"role": "user", "content": content}]
-    )
-    try:
-        parsed_response = json.loads(response.message.content)
-        return ConflictInformation(
-            internal_consistency=float(parsed_response["internal_consistency"]),
-            source_agreement=float(parsed_response["source_agreement"]),
-            temporal_stability=float(parsed_response["temporal_stability"]),
-            **weights,
-        )
-    except:
-        return ConflictInformation(
-            internal_consistency=0.0,
-            source_agreement=0.0,
-            temporal_stability=0.0,
-            **weights,
-        )
-
-
-async def _compute_problem_importance(
-    original_prompt: str, prompts: Prompts, weights: dict[str, float]
-) -> ProblemImportance:
-    content = prompts.get_prompt(
-        PromptNames.Problem_Importance, {"original_prompt": original_prompt}
-    )
-    response = ollama.chat(
-        model="llama3.2", messages=[{"role": "user", "content": content}]
-    )
-    try:
-        parsed_response = json.loads(response.message.content)
-        return ProblemImportance(
-            potential_consequences=float(parsed_response["potential_consequences"]),
-            temporal_urgency=float(parsed_response["temporal_urgency"]),
-            scope_of_impact=float(parsed_response["scope_of_impact"]),
-            **weights,
-        )
-    except:
-        return ProblemImportance(
-            potential_consequences=0.0,
-            temporal_urgency=0.0,
-            scope_of_impact=0.0,
-            **weights,
-        )
+        try:
+            parsed_response = json.loads(response.message.content)
+            return ProblemImportance(
+                potential_consequences=float(parsed_response["potential_consequences"]),
+                temporal_urgency=float(parsed_response["temporal_urgency"]),
+                scope_of_impact=float(parsed_response["scope_of_impact"]),
+                **weights,
+            )
+        except:
+            return ProblemImportance(
+                potential_consequences=0.0,
+                temporal_urgency=0.0,
+                scope_of_impact=0.0,
+                **weights,
+            )
 
 
 def generate_empty_msv() -> MetacognitiveVector:
