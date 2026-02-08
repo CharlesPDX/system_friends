@@ -364,8 +364,8 @@ def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> f
 async def run_experiment(
     request: Request, system_one_prompt: SystemOnePrompt
 ) -> SystemOneResponse:
-    response = await run_system_one(system_one_prompt.user_input)
-    return SystemOneResponse(response=response, session_id=session_id)
+    response, response_id = await run_system_one(system_one_prompt.user_input)
+    return SystemOneResponse(response=response, response_id=response_id)
 
 
 def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
@@ -475,7 +475,7 @@ system_configuration: SystemConfiguration = SystemConfiguration()
 
 
 @app.post("/reset", response_class=HTMLResponse)
-async def reset_system(configuration: dict[str, Any] | None = None) -> None:
+async def reset_system(configuration: dict[str, Any] | None = None) -> str:
     utc_now = datetime.now(timezone.utc)
     formatted_datetime = utc_now.strftime("%Y-%m-%d_%H_%M_%S_%f")
     data_directory = Path("data")
@@ -485,6 +485,8 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> None:
 
     if configuration:
         system_configuration = SystemConfiguration.model_validate(configuration)
+    else:
+        system_configuration = SystemConfiguration()
 
     created = create_database_and_table(
         f"data/{formatted_datetime}.sqlite3", system_configuration.model_dump()
@@ -496,7 +498,7 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> None:
     if created:
         global session_id
         session_id = formatted_datetime
-    return f"""
+    return f"""<!-- {session_id} -->
 <div class="notification is-success">
     <button class="delete"></button>
     Configuration saved successfully!
