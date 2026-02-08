@@ -225,36 +225,42 @@ class MetacognitiveActivationComputation:
 
     @classmethod
     def should_engage_system_two(
-        cls, compute_method: str, metacognitive_vector: MetacognitiveVector
+        cls,
+        compute_method: str,
+        metacognitive_vector: MetacognitiveVector,
+        additional_config: dict = {},
     ) -> bool:
         if compute_method not in cls._registry:
             raise KeyError(f"No subclass registered with key '{compute_method}'")
         if compute_method not in cls._instances:
             cls._instances[compute_method] = cls._registry[compute_method]()
         return cls._instances[compute_method]._should_engage_system_two(
-            metacognitive_vector
+            metacognitive_vector, additional_config
         )
 
     @classmethod
     def get_activation_result(
-        cls, compute_method: str, metacognitive_vector: MetacognitiveVector
+        cls,
+        compute_method: str,
+        metacognitive_vector: MetacognitiveVector,
+        additional_config: dict = {},
     ) -> str:
         if compute_method not in cls._registry:
             raise KeyError(f"No subclass registered with key '{compute_method}'")
         if compute_method not in cls._instances:
             cls._instances[compute_method] = cls._registry[compute_method]()
         return cls._instances[compute_method]._get_activation_result(
-            metacognitive_vector
+            metacognitive_vector, additional_config
         )
 
     @abstractmethod
     def _should_engage_system_two(
-        self, metacognitive_vector: MetacognitiveVector
+        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
     ) -> bool: ...
 
     @abstractmethod
     def _get_activation_result(
-        self, metacognitive_vector: MetacognitiveVector
+        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
     ) -> str: ...
 
 
@@ -263,14 +269,18 @@ class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputat
     activation_threshold: float = 0.1
 
     def _should_engage_system_two(
-        self, metacognitive_vector: MetacognitiveVector
+        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
     ) -> bool:
         activation_value = self._activation_function(
             metacognitive_vector.calculated_value
         )
-        return activation_value >= self.activation_threshold
+        return activation_value >= additional_config.get(
+            "activation_threshold", self.activation_threshold
+        )
 
-    def _get_activation_result(self, metacognitive_vector: MetacognitiveVector) -> str:
+    def _get_activation_result(
+        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
+    ) -> str:
         return str(self._activation_function(metacognitive_vector.calculated_value))
 
     def _activation_function(self, value: int) -> float:
@@ -303,6 +313,7 @@ class MetacognitiveVectorComputation:
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
+        additional_config: dict = {},
     ) -> MetacognitiveVector:
         if compute_method not in cls._registry:
             raise KeyError(f"No subclass registered with key '{compute_method}'")
@@ -331,6 +342,7 @@ class MetacognitiveVectorComputation:
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
+        additional_config: dict = {},
     ) -> MetacognitiveVector: ...
 
 
@@ -347,6 +359,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
+        additional_config: dict = {},
     ) -> MetacognitiveVector:
         prompts = Prompts()
         (

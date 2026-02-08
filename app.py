@@ -22,15 +22,14 @@ from fastapi.templating import Jinja2Templates
 import system_one_model
 import system_two_model
 from app_graph import create_system_two_node_graph
+from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import (
     MetacognitiveActivationComputation,
     MetacognitiveVector,
     MetacognitiveVectorComputation,
-    generate_empty_msv,
 )
-from prompts import Prompts
 from system_communication_objects import SystemTwoRequest
 
 parser = argparse.ArgumentParser()
@@ -95,7 +94,9 @@ async def get_chart(request: Request, id: str = None):
                     asdict(msv)
                     | {
                         "activation_result": MetacognitiveActivationComputation.get_activation_result(
-                            "baseline", msv
+                            system_configuration.activation_computation_key,
+                            msv,
+                            system_configuration.additional_configuration,
                         )
                     },
                     indent=2,
@@ -234,22 +235,6 @@ def _clean_values(value) -> dict[str, float]:
         for k, v in asdict(value).items()
         if k not in excluded_keys and not k.startswith("weight_")
     }
-
-
-def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
-    weights = {}
-    for x in (
-        ("msv_weights", msv),
-        ("emotional_response", msv.emotional_response),
-        ("correctness", msv.correctness),
-        ("experiential_matching", msv.experiential_matching),
-        ("conflict_information", msv.conflict_information),
-        ("problem_importance", msv.problem_importance),
-    ):
-        weights[x[0]] = {
-            k: v for k, v in asdict(x[1]).items() if k.startswith("weight")
-        }
-    return weights
 
 
 def _generate_bar_chart(
@@ -391,14 +376,12 @@ def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
     return id
 
 
-prompts = Prompts()
 history = deque(maxlen=10)
 
 
 async def run_system_one(user_input: str) -> tuple[str, str]:
     try:
-        global prompts
-        global weights
+        global system_configuration
 
         # Generate a response from the system one model and compute the metacognative state vector
         response = await system_one_model.get_response(user_input, list(history))
@@ -410,20 +393,23 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
             ]
         )
         state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-            compute_method="baseline",
-            prompts=prompts,
-            weights=weights,
+            compute_method=system_configuration.vector_computation_key,
+            prompts=system_configuration.prompts,
+            weights=system_configuration.weights,
             response=response,
             original_prompt=user_input,
             knowledge_base=historical_info,
             historical_responses=historical_info,
+            additional_config=system_configuration.additional_configuration,
         )
 
         parsed_response = system_two_model.SystemTwoResponse(
             system_two_response=None, metacognitive_vector=None, node_responses=None
         )
         if MetacognitiveActivationComputation.should_engage_system_two(
-            "baseline", state
+            system_configuration.activation_computation_key,
+            state,
+            system_configuration.additional_configuration,
         ):
             system_two_response = httpx.post(
                 f"{app_args.system_two_url}/system2",
@@ -431,8 +417,8 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
                     user_prompt=user_input,
                     system_one_response=response,
                     metacognitive_vector=state,
-                    prompts=prompts,
-                    weights=weights,
+                    prompts=system_configuration.prompts,
+                    weights=system_configuration.weights,
                 ).model_dump_json(),
                 timeout=None,
             )
@@ -478,35 +464,30 @@ async def run_system_two(
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    weights_and_prompts = weights | {"prompts": prompts.model_dump()}
     return templates.TemplateResponse(
-        "index.html", {"request": request, "weights_and_prompts": weights_and_prompts}
+        "index.html",
+        {"request": request, "weights_and_prompts": system_configuration.model_dump()},
     )
 
 
 session_id: str | None = None
-weights: dict[str, dict[str, float]] | None = None
+system_configuration: SystemConfiguration = SystemConfiguration()
 
 
 @app.post("/reset", response_class=HTMLResponse)
-async def reset_system(configuration: dict[str, dict[str, Any]] | None = None) -> None:
+async def reset_system(configuration: dict[str, Any] | None = None) -> None:
     utc_now = datetime.now(timezone.utc)
     formatted_datetime = utc_now.strftime("%Y-%m-%d_%H_%M_%S_%f")
     data_directory = Path("data")
     data_directory.mkdir(parents=True, exist_ok=True)
 
-    global prompts
-    global weights
-    if not weights and not configuration:
-        weights = get_weights(generate_empty_msv())
+    global system_configuration
 
     if configuration:
-        prompts = Prompts(**configuration["prompts"])
-        weights = configuration.copy()
-        del weights["prompts"]
-    current_configuration = weights | {"prompts": prompts.model_dump()}
+        system_configuration = SystemConfiguration.model_validate(configuration)
+
     created = create_database_and_table(
-        f"data/{formatted_datetime}.sqlite3", current_configuration
+        f"data/{formatted_datetime}.sqlite3", system_configuration.model_dump()
     )
     msv_state.clear()
     system_two_state.clear()
