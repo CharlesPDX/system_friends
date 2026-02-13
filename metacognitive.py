@@ -292,8 +292,8 @@ class MetacognitiveVectorComputation:
     # Set by subclasses to register
     compute_method: str | None = None
 
-    _registry: dict[str, "MetacognitiveVectorComputation"] = {}
-    _instances: dict[str, "MetacognitiveVectorComputation"] = {}
+    _registry: dict[str, type[Self]] = {}
+    _instances: dict[str, Self] = {}
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()

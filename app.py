@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import httpx
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
 from bokeh.plotting import figure
@@ -30,7 +29,7 @@ from metacognitive import (
     MetacognitiveVector,
     MetacognitiveVectorComputation,
 )
-from system_communication_objects import SystemTwoRequest
+from orchestrator import Orchestrator
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--system-two", default=False, action="store_true")
@@ -80,7 +79,7 @@ class ChartNames(StrEnum):
 
 
 @app.get("/get_chart", response_class=HTMLResponse)
-async def get_chart(request: Request, id: str = None):
+async def get_chart(request: Request, id: str | None = None):
     msv_response = []
     msv_graphs = []
     msv_bar_graphs = []
@@ -229,7 +228,7 @@ async def node_detail(node_id: int):
 excluded_keys = {"calculated_value", "version"}
 
 
-def _clean_values(value) -> dict[str, float]:
+def _clean_values(value) -> dict[str, int]:
     return {
         k: v
         for k, v in asdict(value).items()
@@ -237,9 +236,7 @@ def _clean_values(value) -> dict[str, float]:
     }
 
 
-def _generate_bar_chart(
-    data: dict[str, float], x_label: str, chart_title: str
-) -> figure:
+def _generate_bar_chart(data: dict[str, int], x_label: str, chart_title: str) -> figure:
     categories: list[str] = [
         k.replace("_", " ")
         .title()
@@ -266,7 +263,7 @@ def _generate_bar_chart(
     return p
 
 
-def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:
+def _generate_chart(data: dict[str, int], x_label: str, chart_title: str) -> figure:
     categories: list[str] = [
         k.replace("_", " ")
         .title()
@@ -368,7 +365,7 @@ async def run_experiment(
     return SystemOneResponse(response=response, response_id=response_id)
 
 
-def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
+def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector | None) -> str:
     id = str(uuid4())
     msv_state[id].append(msv_system_one)
     if msv_system_two:
@@ -411,19 +408,10 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
             state,
             system_configuration.additional_configuration,
         ):
-            system_two_response = httpx.post(
-                f"{app_args.system_two_url}/system2",
-                content=SystemTwoRequest(
-                    user_prompt=user_input,
-                    system_one_response=response,
-                    metacognitive_vector=state,
-                    prompts=system_configuration.prompts,
-                    weights=system_configuration.weights,
-                ).model_dump_json(),
-                timeout=None,
-            )
-            parsed_response = system_two_model.SystemTwoResponse.model_validate_json(
-                system_two_response.text
+            parsed_response = await orchistrator.get_system_two_response(
+                user_prompt=user_input,
+                system_one_response=response,
+                system_one_vector=state,
             )
 
         if session_id:
@@ -454,14 +442,6 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/system2")
-async def run_system_two(
-    system_two_request: SystemTwoRequest,
-) -> system_two_model.SystemTwoResponse:
-    # This requires running a second instance with the `--system-two`` flag:
-    return await system_two_model.get_response(system_two_request)
-
-
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse(
@@ -487,6 +467,8 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> str:
         system_configuration = SystemConfiguration.model_validate(configuration)
     else:
         system_configuration = SystemConfiguration()
+
+    orchistrator.set_configuration(system_configuration)
 
     created = create_database_and_table(
         f"data/{formatted_datetime}.sqlite3", system_configuration.model_dump()
@@ -516,5 +498,6 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> str:
 if __name__ == "__main__":
     import uvicorn
 
-    port = "8000" if not app_args.system_two else "8001"
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    orchistrator = Orchestrator(system_configuration=system_configuration)
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

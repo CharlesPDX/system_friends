@@ -10,7 +10,7 @@ from prompts import Prompts
 
 class SystemConfiguration(BaseModel):
     prompts: Prompts = Field(default_factory=Prompts)
-    weights: dict[str, dict[str, float]] | None = None
+    weights: dict[str, dict[str, float]] = Field(default_factory=dict)
     vector_computation_key: str = Field(default="baseline")
     activation_computation_key: str = Field(default="baseline")
     additional_configuration: dict = Field(default_factory=dict)
@@ -29,11 +29,11 @@ class SystemConfiguration(BaseModel):
 
     @model_validator(mode="after")
     def _default_weights(self) -> Self:
-        if self.weights is None:
+        if not self.weights:
             self.weights = self._get_weights(generate_empty_msv())
         return self
 
-    def _get_weights(self, msv: MetacognitiveVector) -> dict[str, float]:
+    def _get_weights(self, msv: MetacognitiveVector) -> dict[str, dict[str, float]]:
         weights = {}
         for x in (
             ("msv_weights", msv),
