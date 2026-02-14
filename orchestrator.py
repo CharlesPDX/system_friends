@@ -1,12 +1,35 @@
-import ollama
+from collections import deque
 
+import ollama
+from pydantic import BaseModel
+
+import system_one_model
 from config import SystemConfiguration
-from metacognitive import MetacognitiveVector, MetacognitiveVectorComputation
+from metacognitive import (
+    MetacognitiveActivationComputation,
+    MetacognitiveVector,
+    MetacognitiveVectorComputation,
+)
 from prompts import PromptNames
-from system_two_model import Node, NodeResponse, NodeRole, SystemTwoResponse
+from system_two_model import Node, NodeResponse, NodeRole
+
+
+class MetacognitiveVectorResponse(BaseModel):
+    system_one_metacognitive_vector: MetacognitiveVector
+    system_two_metacognitive_vector: MetacognitiveVector | None
+
+
+class SystemResponse(BaseModel):
+    system_one_response: str
+    system_two_response: str | None
+    final_response: str
+    metacognitive_vector: MetacognitiveVectorResponse
+    node_responses: list[NodeResponse] | None
 
 
 class Orchestrator:
+    history = deque(maxlen=10)
+
     def __init__(self, system_configuration: SystemConfiguration):
         self.system_configuration = system_configuration
         self._system_one_nodes = [Node()]
@@ -52,12 +75,77 @@ class Orchestrator:
     def set_configuration(self, system_configuration: SystemConfiguration) -> None:
         self.system_configuration = system_configuration
 
-    async def get_system_two_response(
+    def reset(self) -> None:
+        self.history.clear()
+
+    async def get_metacognitive_informed_response(
+        self, user_prompt: str
+    ) -> SystemResponse:
+        # Generate a response from the system one model and compute the metacognative state vector
+        system_one_response = await system_one_model.get_response(
+            user_prompt, list(self.history)
+        )
+        historical_info = "\n".join(
+            [
+                message["content"]
+                for message in self.history
+                if message["role"] == "assistant"
+            ]
+        )
+        state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+            compute_method=self.system_configuration.vector_computation_key,
+            prompts=self.system_configuration.prompts,
+            weights=self.system_configuration.weights,
+            response=system_one_response,
+            original_prompt=user_prompt,
+            knowledge_base=historical_info,
+            historical_responses=historical_info,
+            additional_config=self.system_configuration.additional_configuration,
+        )
+        overall_system_two_response = None
+        system_two_msv = None
+        node_responses = None
+        if MetacognitiveActivationComputation.should_engage_system_two(
+            self.system_configuration.activation_computation_key,
+            state,
+            self.system_configuration.additional_configuration,
+        ):
+            node_responses, overall_system_two_response, system_two_msv = (
+                await self._get_system_two_response(
+                    user_prompt=user_prompt,
+                    system_one_response=system_one_response,
+                    system_one_vector=state,
+                )
+            )
+
+        system_response = SystemResponse(
+            system_one_response=system_one_response,
+            system_two_response=overall_system_two_response,
+            final_response=(
+                overall_system_two_response
+                if overall_system_two_response
+                else system_one_response
+            ),
+            metacognitive_vector=MetacognitiveVectorResponse(
+                system_one_metacognitive_vector=state,
+                system_two_metacognitive_vector=system_two_msv,
+            ),
+            node_responses=node_responses,
+        )
+
+        self.history.append({"role": "user", "content": user_prompt})
+        self.history.append(
+            {"role": "assistant", "content": system_response.final_response}
+        )
+
+        return system_response
+
+    async def _get_system_two_response(
         self,
         user_prompt: str,
         system_one_response: str,
         system_one_vector: MetacognitiveVector,
-    ) -> SystemTwoResponse:
+    ) -> tuple:
 
         messages = [
             {
@@ -132,8 +220,8 @@ class Orchestrator:
             overall_system_two_response = synthesizer_response
             state = synthesizer_msv
 
-        return SystemTwoResponse(
-            node_responses=role_responses,
-            system_two_response=overall_system_two_response,
-            metacognitive_vector=state,
+        return (
+            role_responses,
+            overall_system_two_response,
+            state,
         )

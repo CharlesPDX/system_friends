@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from metacognitive import MetacognitiveVector
 from prompts import PromptNames, Prompts
-from system_communication_objects import SystemTwoRequest
 
 
 class NodeRole(StrEnum):
@@ -24,12 +23,6 @@ class NodeResponse(BaseModel):
 
     class Config:
         frozen = True
-
-
-class SystemTwoResponse(BaseModel):
-    system_two_response: str | None
-    metacognitive_vector: MetacognitiveVector | None
-    node_responses: list[NodeResponse] | None
 
 
 class Node:

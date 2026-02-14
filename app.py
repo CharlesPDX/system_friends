@@ -1,8 +1,7 @@
-import argparse
 import json
 import math
 import traceback
-from collections import defaultdict, deque
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -19,18 +18,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-import system_one_model
 import system_two_model
 from app_graph import create_system_two_node_graph
 from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
-from metacognitive import (
-    MetacognitiveActivationComputation,
-    MetacognitiveVector,
-    MetacognitiveVectorComputation,
-)
-from orchestrator import Orchestrator
+from metacognitive import MetacognitiveActivationComputation, MetacognitiveVector
+from orchestrator import MetacognitiveVectorResponse, Orchestrator, SystemResponse
 
 
 @asynccontextmanager
@@ -49,7 +43,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.post("/chat", response_class=HTMLResponse)
 async def chat(request: Request, user_input: str = Form(...)):
-    response, id = await run_system_one(user_input)
+    response, id = await _run_system(user_input)
     return f"""
 <div class="message is-bot" 
      hx-get="/get_chart?id={id}" 
@@ -60,7 +54,7 @@ async def chat(request: Request, user_input: str = Form(...)):
 
 
 msv_state: defaultdict[str, list[MetacognitiveVector]] = defaultdict(list)
-system_two_state: dict[str, system_two_model.SystemTwoResponse] = {}
+system_state: dict[str, SystemResponse] = {}
 selected_nodes: list[system_two_model.NodeResponse] = []
 
 
@@ -190,9 +184,7 @@ async def get_chart(request: Request, id: str | None = None):
             msv_bar_graphs.append(bar_parts)
             if system_number == 1:
                 global selected_nodes
-                plot, selected_nodes = create_system_two_node_graph(
-                    system_two_state[id]
-                )
+                plot, selected_nodes = create_system_two_node_graph(system_state[id])
                 system_two_graph_components = components(plot)
     return templates.TemplateResponse(
         request=request,
@@ -352,84 +344,41 @@ def _generate_chart(data: dict[str, int], x_label: str, chart_title: str) -> fig
     return p
 
 
-@app.post("/system1")
-async def run_experiment(
+@app.post("/run_system")
+async def run_system(
     request: Request, system_one_prompt: SystemOnePrompt
 ) -> SystemOneResponse:
-    response, response_id = await run_system_one(system_one_prompt.user_input)
+    response, response_id = await _run_system(system_one_prompt.user_input)
     return SystemOneResponse(response=response, response_id=response_id)
 
 
-def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector | None) -> str:
+def _save_msv_state(msv_response: MetacognitiveVectorResponse) -> str:
     id = str(uuid4())
-    msv_state[id].append(msv_system_one)
-    if msv_system_two:
-        msv_state[id].append(msv_system_two)
+    msv_state[id].append(msv_response.system_one_metacognitive_vector)
+    if msv_response.system_two_metacognitive_vector:
+        msv_state[id].append(msv_response.system_two_metacognitive_vector)
     return id
 
 
-history = deque(maxlen=10)
-
-
-async def run_system_one(user_input: str) -> tuple[str, str]:
+async def _run_system(user_input: str) -> tuple[str, str]:
     try:
-        # Generate a response from the system one model and compute the metacognative state vector
-        response = await system_one_model.get_response(user_input, list(history))
-        historical_info = "\n".join(
-            [
-                message["content"]
-                for message in history
-                if message["role"] == "assistant"
-            ]
+        system_response = await orchestrator.get_metacognitive_informed_response(
+            user_input
         )
-        state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-            compute_method=system_configuration.vector_computation_key,
-            prompts=system_configuration.prompts,
-            weights=system_configuration.weights,
-            response=response,
-            original_prompt=user_input,
-            knowledge_base=historical_info,
-            historical_responses=historical_info,
-            additional_config=system_configuration.additional_configuration,
-        )
-
-        parsed_response = system_two_model.SystemTwoResponse(
-            system_two_response=None, metacognitive_vector=None, node_responses=None
-        )
-        if MetacognitiveActivationComputation.should_engage_system_two(
-            system_configuration.activation_computation_key,
-            state,
-            system_configuration.additional_configuration,
-        ):
-            parsed_response = await orchistrator.get_system_two_response(
-                user_prompt=user_input,
-                system_one_response=response,
-                system_one_vector=state,
-            )
-
         if session_id:
             record_interaction(
                 db_file=f"data/{session_id}.sqlite3",
                 user_prompt=user_input,
-                system_one_response=response,
-                system_one_msv=state,
-                system_two_response=parsed_response.system_two_response,
-                system_two_msv=parsed_response.metacognitive_vector,
+                system_one_response=system_response.system_one_response,
+                system_one_msv=system_response.metacognitive_vector.system_one_metacognitive_vector,
+                system_two_response=system_response.system_two_response,
+                system_two_msv=system_response.metacognitive_vector.system_two_metacognitive_vector,
             )
-        id = save_msv_state(state, parsed_response.metacognitive_vector)
-        system_two_state[id] = parsed_response
-        history.append({"role": "user", "content": user_input})
-        system_response = (
-            (
-                parsed_response.system_two_response
-                if parsed_response.system_two_response
-                else response
-            ),
-            id,
-        )
-        history.append({"role": "assistant", "content": system_response[0]})
 
-        return system_response
+        id = _save_msv_state(system_response.metacognitive_vector)
+        system_state[id] = system_response
+
+        return system_response.final_response, id
     except Exception as e:
         print(traceback.format_exc())
         print(e)
@@ -462,14 +411,14 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> str:
     else:
         system_configuration = SystemConfiguration()
 
-    orchistrator.set_configuration(system_configuration)
+    orchestrator.set_configuration(system_configuration)
+    orchestrator.reset()
 
     created = create_database_and_table(
         f"data/{formatted_datetime}.sqlite3", system_configuration.model_dump()
     )
     msv_state.clear()
-    system_two_state.clear()
-    history.clear()
+    system_state.clear()
 
     if created:
         global session_id
@@ -492,6 +441,6 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> str:
 if __name__ == "__main__":
     import uvicorn
 
-    orchistrator = Orchestrator(system_configuration=system_configuration)
+    orchestrator = Orchestrator(system_configuration=system_configuration)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

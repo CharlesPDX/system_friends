@@ -49,7 +49,7 @@ def run_experiments(url: str, experiments: Experiments):
             logging.info(f"Sending prompt {prompt_index+1} of {number_of_prompts}")
             try:
                 response = requests.post(
-                    f"{url}/system1",
+                    f"{url}/run_system",
                     json=SystemOnePrompt(user_input=prompt).model_dump(),
                 )
                 SystemOneResponse.model_validate(response.json())
