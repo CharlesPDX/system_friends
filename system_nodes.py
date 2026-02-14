@@ -38,7 +38,7 @@ class Node:
         port: str = "11434",
     ) -> None:
         server_address = f"http://{host}:{port}"
-        self.client = ollama.Client(host=server_address)
+        self.client = ollama.AsyncClient(host=server_address)
         self.model = model
 
     async def get_system_one_response(
@@ -47,7 +47,7 @@ class Node:
         historical_messages: deque[dict],
         role: NodeRole,
     ) -> tuple[str, NodeRole]:
-        response = self.client.chat(
+        response = await self.client.chat(
             model=self.model,
             messages=list(historical_messages)
             + [{"role": "user", "content": user_prompt}],
@@ -55,7 +55,7 @@ class Node:
         return response.message.content, role
 
     async def summarize_system_one_response(self, responses: list[str]) -> str:
-        response = self.client.chat(
+        response = await self.client.chat(
             model=self.model,
             messages=[
                 {
@@ -93,7 +93,7 @@ class Node:
             },
         ]
 
-        response = self.client.chat(model=self.model, messages=messages)
+        response = await self.client.chat(model=self.model, messages=messages)
         return response.message.content
 
 
@@ -265,7 +265,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
             PromptNames.Correctness_Evaluation,
             {"original_prompt": original_prompt, "message": message},
         )
-        response = node.client.chat(
+        response = await node.client.chat(
             model=node.model, messages=[{"role": "user", "content": content}]
         )
         try:
@@ -305,7 +305,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 "historical_responses": historical_responses,
             },
         )
-        response = node.client.chat(
+        response = await node.client.chat(
             model=node.model, messages=[{"role": "user", "content": content}]
         )
         try:
@@ -341,7 +341,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
             PromptNames.Conflicting_Information,
             {"sources": sources, "message": message, "temporal_info": temporal_info},
         )
-        response = node.client.chat(
+        response = await node.client.chat(
             model=node.model, messages=[{"role": "user", "content": content}]
         )
         try:
@@ -374,7 +374,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         content = prompts.get_prompt(
             PromptNames.Problem_Importance, {"original_prompt": original_prompt}
         )
-        response = node.client.chat(
+        response = await node.client.chat(
             model=node.model, messages=[{"role": "user", "content": content}]
         )
         try:
