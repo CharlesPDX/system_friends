@@ -251,7 +251,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 system_configuration.weights["experiential_matching"],
                 node,
             ),
-            self._compute_conflict_information(
+            self._compute_conflicting_information(
                 response,
                 sources,
                 temporal_info,
@@ -369,7 +369,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 **weights,
             )
 
-    async def _compute_conflict_information(
+    async def _compute_conflicting_information(
         self,
         message: str,
         sources: str,
