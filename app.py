@@ -31,16 +31,10 @@ from metacognitive import (
 )
 from orchestrator import Orchestrator
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--system-two", default=False, action="store_true")
-parser.add_argument("--system-two-url", required=False)
-app_args = parser.parse_args()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not app_args.system_two:
-        await reset_system()
+    await reset_system()
 
     yield
     # cleanup/shutdown goes here, if necessary
@@ -378,8 +372,6 @@ history = deque(maxlen=10)
 
 async def run_system_one(user_input: str) -> tuple[str, str]:
     try:
-        global system_configuration
-
         # Generate a response from the system one model and compute the metacognative state vector
         response = await system_one_model.get_response(user_input, list(history))
         historical_info = "\n".join(
