@@ -1,9 +1,13 @@
 import math
+import statistics
 from abc import abstractmethod
-from dataclasses import dataclass, fields
-from typing import Self
+from typing import Self, TypeVar
 
 from pydantic import BaseModel
+
+from common import NodeRole
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class ResponseVectors(BaseModel):
@@ -14,6 +18,23 @@ class ResponseVectors(BaseModel):
 
     def model_post_init(self, context) -> None:
         self.calculated_value = self._compute_value()
+
+    @staticmethod
+    def mean(response_vectors: list[T], model: type[T]) -> T:
+        self_fields = model.model_fields.keys()
+        n = len(response_vectors)
+        mean_model = {}
+        for field in self_fields:
+            if (
+                field != "version"
+                and field != "calculated_value"
+                and not field.startswith("weight_")
+            ):
+                field_total = sum(
+                    [getattr(response, field) for response in response_vectors]
+                )
+                mean_model[field] = field_total / n
+        return model.model_validate(mean_model)
 
 
 class EmotionalResponseWeights(BaseModel):
@@ -218,6 +239,33 @@ class MetacognitiveVector(ResponseVectors):
             )
         )
 
+    @staticmethod
+    def msv_mean(
+        metacognitive_vectors: list["MetacognitiveVector"],
+    ) -> "MetacognitiveVector":
+        return MetacognitiveVector(
+            emotional_response=EmotionalResponse.mean(
+                [msv.emotional_response for msv in metacognitive_vectors],
+                EmotionalResponse,
+            ),
+            correctness_evaluation=CorrectnessEvaluationResponse.mean(
+                [msv.correctness_evaluation for msv in metacognitive_vectors],
+                CorrectnessEvaluationResponse,
+            ),
+            experiential_matching=ExperientialMatchingResponse.mean(
+                [msv.experiential_matching for msv in metacognitive_vectors],
+                ExperientialMatchingResponse,
+            ),
+            conflicting_information=ConflictingInformationResponse.mean(
+                [msv.conflicting_information for msv in metacognitive_vectors],
+                ConflictingInformationResponse,
+            ),
+            problem_importance=ProblemImportanceResponse.mean(
+                [msv.problem_importance for msv in metacognitive_vectors],
+                ProblemImportanceResponse,
+            ),
+        )
+
 
 class MetacognitiveActivationComputation:
     # Set by subclasses to register
@@ -236,7 +284,7 @@ class MetacognitiveActivationComputation:
     def should_engage_system_two(
         cls,
         compute_method: str,
-        metacognitive_vector: MetacognitiveVector,
+        msv_by_role: dict[NodeRole, MetacognitiveVector],
         additional_config: dict = {},
     ) -> bool:
         if compute_method not in cls._registry:
@@ -244,7 +292,7 @@ class MetacognitiveActivationComputation:
         if compute_method not in cls._instances:
             cls._instances[compute_method] = cls._registry[compute_method]()
         return cls._instances[compute_method]._should_engage_system_two(
-            metacognitive_vector, additional_config
+            msv_by_role, additional_config
         )
 
     @classmethod
@@ -264,12 +312,16 @@ class MetacognitiveActivationComputation:
 
     @abstractmethod
     def _should_engage_system_two(
-        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
+        self,
+        msv_by_role: dict[NodeRole, MetacognitiveVector],
+        additional_config: dict = {},
     ) -> bool: ...
 
     @abstractmethod
     def _get_activation_result(
-        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
+        self,
+        metacognitive_vector: MetacognitiveVector,
+        additional_config: dict = {},
     ) -> str: ...
 
 
@@ -277,18 +329,27 @@ class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputat
     compute_method = "baseline"
     activation_threshold: float = 0.1
 
+    def _mean_msv(self, metacognitive_vectors: list[MetacognitiveVector]) -> int:
+        return int(
+            statistics.mean([msv.calculated_value for msv in metacognitive_vectors])
+        )
+
     def _should_engage_system_two(
-        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
+        self,
+        msv_by_role: dict[NodeRole, MetacognitiveVector],
+        additional_config: dict = {},
     ) -> bool:
         activation_value = self._activation_function(
-            metacognitive_vector.calculated_value
+            self._mean_msv(list(msv_by_role.values()))
         )
         return activation_value >= additional_config.get(
             "activation_threshold", self.activation_threshold
         )
 
     def _get_activation_result(
-        self, metacognitive_vector: MetacognitiveVector, additional_config: dict = {}
+        self,
+        metacognitive_vector: MetacognitiveVector,
+        additional_config: dict = {},
     ) -> str:
         return str(self._activation_function(metacognitive_vector.calculated_value))
 
