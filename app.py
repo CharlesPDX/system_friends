@@ -18,12 +18,16 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-import system_two_model
+import system_nodes
 from app_graph import create_system_two_node_graph
 from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
-from metacognitive import MetacognitiveActivationComputation, MetacognitiveVector
+from metacognitive import (
+    MetacognitiveActivationComputation,
+    MetacognitiveVector,
+    generate_empty_msv,
+)
 from orchestrator import MetacognitiveVectorResponse, Orchestrator, SystemResponse
 
 
@@ -55,7 +59,7 @@ async def chat(request: Request, user_input: str = Form(...)):
 
 msv_state: defaultdict[str, list[MetacognitiveVector]] = defaultdict(list)
 system_state: dict[str, SystemResponse] = {}
-selected_nodes: list[system_two_model.NodeResponse] = []
+selected_nodes: list[system_nodes.NodeResponse] = []
 
 
 class ChartNames(StrEnum):
@@ -393,8 +397,27 @@ async def read_root(request: Request):
     )
 
 
+def _get_default_weights() -> dict[str, dict[str, float]]:
+    msv = generate_empty_msv()
+    weights = {}
+    for x in (
+        ("msv_weights", msv),
+        ("emotional_response", msv.emotional_response),
+        ("correctness_evaluation", msv.correctness_evaluation),
+        ("experiential_matching", msv.experiential_matching),
+        ("conflicting_information", msv.conflicting_information),
+        ("problem_importance", msv.problem_importance),
+    ):
+        weights[x[0]] = {
+            k: v for k, v in asdict(x[1]).items() if k.startswith("weight")
+        }
+    return weights
+
+
 session_id: str | None = None
-system_configuration: SystemConfiguration = SystemConfiguration()
+system_configuration: SystemConfiguration = SystemConfiguration(
+    weights=_get_default_weights()
+)
 
 
 @app.post("/reset", response_class=HTMLResponse)
@@ -409,7 +432,7 @@ async def reset_system(configuration: dict[str, Any] | None = None) -> str:
     if configuration:
         system_configuration = SystemConfiguration.model_validate(configuration)
     else:
-        system_configuration = SystemConfiguration()
+        system_configuration = SystemConfiguration(weights=_get_default_weights())
 
     orchestrator.set_configuration(system_configuration)
     orchestrator.reset()

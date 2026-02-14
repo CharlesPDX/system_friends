@@ -1,17 +1,11 @@
 from collections import deque
 
-import ollama
 from pydantic import BaseModel
 
-import system_one_model
 from config import SystemConfiguration
-from metacognitive import (
-    MetacognitiveActivationComputation,
-    MetacognitiveVector,
-    MetacognitiveVectorComputation,
-)
+from metacognitive import MetacognitiveActivationComputation, MetacognitiveVector
 from prompts import PromptNames
-from system_two_model import Node, NodeResponse, NodeRole
+from system_nodes import MetacognitiveVectorComputation, Node, NodeResponse, NodeRole
 
 
 class MetacognitiveVectorResponse(BaseModel):
@@ -32,6 +26,7 @@ class Orchestrator:
 
     def __init__(self, system_configuration: SystemConfiguration):
         self.system_configuration = system_configuration
+        self._system_node = Node()
         self._system_one_nodes = [Node()]
         self._system_two_nodes = [
             Node(role=NodeRole.Domain_Expert),
@@ -78,29 +73,34 @@ class Orchestrator:
     def reset(self) -> None:
         self.history.clear()
 
-    async def get_metacognitive_informed_response(
-        self, user_prompt: str
-    ) -> SystemResponse:
-        # Generate a response from the system one model and compute the metacognative state vector
-        system_one_response = await system_one_model.get_response(
-            user_prompt, list(self.history)
-        )
-        historical_info = "\n".join(
+    def _get_historical_info_from_chat(self) -> str:
+        return "\n".join(
             [
                 message["content"]
                 for message in self.history
                 if message["role"] == "assistant"
             ]
         )
+
+    async def get_metacognitive_informed_response(
+        self, user_prompt: str
+    ) -> SystemResponse:
+        # Generate a response from the system one model and compute the metacognative state vector
+        system_one_response = await self._system_one_nodes[0].get_response(
+            user_prompt,
+            self.history,
+            "",
+            NodeRole.System_One,
+            self.system_configuration.prompts,
+        )
+        historical_info = self._get_historical_info_from_chat()
         state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-            compute_method=self.system_configuration.vector_computation_key,
-            prompts=self.system_configuration.prompts,
-            weights=self.system_configuration.weights,
+            system_configuration=self.system_configuration,
+            node=self._system_one_nodes[0],
             response=system_one_response,
             original_prompt=user_prompt,
             knowledge_base=historical_info,
             historical_responses=historical_info,
-            additional_config=self.system_configuration.additional_configuration,
         )
         overall_system_two_response = None
         system_two_msv = None
@@ -167,17 +167,17 @@ class Orchestrator:
         synthesizer_msv: MetacognitiveVector | None = None
         for role, node in self.taken_roles.items():
             if node:
-                node_response = node.get_response(
+                node_response = await node.get_response(
                     user_prompt,
+                    self.history,
                     previous_response,
                     previous_role,
                     self.system_configuration.prompts,
                 )
 
                 state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-                    self.system_configuration.vector_computation_key,
-                    self.system_configuration.prompts,
-                    self.system_configuration.weights,
+                    self.system_configuration,
+                    node,
                     node_response,
                     previous_response,
                 )
@@ -204,14 +204,13 @@ class Orchestrator:
                 }
             )
 
-            overall_system_two_response = ollama.chat(
-                model="llama3.2", messages=messages
+            overall_system_two_response = self._system_node.client.chat(
+                model=self._system_node.model, messages=messages
             ).message.content
             state = (
                 await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-                    self.system_configuration.vector_computation_key,
-                    self.system_configuration.prompts,
-                    self.system_configuration.weights,
+                    self.system_configuration,
+                    self._system_node,
                     overall_system_two_response if overall_system_two_response else "",
                     system_one_response,
                 )

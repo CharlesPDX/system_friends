@@ -14,7 +14,7 @@ from bokeh.models import (
 from bokeh.plotting import figure
 
 from orchestrator import SystemResponse
-from system_two_model import NodeResponse, NodeRole
+from system_nodes import NodeResponse, NodeRole
 
 
 def create_system_two_node_graph(
