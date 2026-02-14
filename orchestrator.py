@@ -1,7 +1,9 @@
+import asyncio
 from collections import deque
 
 from pydantic import BaseModel
 
+from common import MetacognitiveComponentNames
 from config import SystemConfiguration
 from metacognitive import MetacognitiveActivationComputation, MetacognitiveVector
 from prompts import PromptNames
@@ -22,50 +24,88 @@ class SystemResponse(BaseModel):
 
 
 class Orchestrator:
+    # TODO adjust weights!
+    role_weights: dict[NodeRole, dict[str, float]] = {
+        NodeRole.Domain_Expert: {
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.7,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.1,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
+        },
+        NodeRole.Critic: {
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.5,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.05,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.4,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.05,
+        },
+        NodeRole.Evaluator: {
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.4,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.3,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.3,
+        },
+        NodeRole.Generalist: {
+            MetacognitiveComponentNames.Emotional_Response.value: 0.2,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.2,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.2,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.2,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
+        },
+        NodeRole.Synthesizer: {
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.25,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.25,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.25,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.25,
+        },
+    }
+
+    def get_role_preferences(
+        self, system_one_vector: MetacognitiveVector
+    ) -> dict[NodeRole, float]:
+        role_preferences: dict[NodeRole, float] = {}
+        for role, weights in self.role_weights.items():
+            running_value = 0.0
+            for vector_name, weight in weights.items():
+                # maybe find a better way to do this than a really flexi-typed accessor into ResponseVectors
+                running_value += (
+                    weight * getattr(system_one_vector, vector_name).calculated_value
+                )
+            role_preferences[role] = running_value
+        return role_preferences
+
     history = deque(maxlen=10)
 
     def __init__(self, system_configuration: SystemConfiguration):
         self.system_configuration = system_configuration
-        self._system_node = Node()
-        self._system_one_nodes = [Node()]
-        self._system_two_nodes = [
-            Node(role=NodeRole.Domain_Expert),
-            Node(role=NodeRole.Critic),
+        self._nodes = [
+            Node(),
+            Node(),
         ]
-        self.taken_roles: dict[NodeRole, Node | None] = {
-            NodeRole.Domain_Expert: None,
-            NodeRole.Critic: None,
-            NodeRole.Evaluator: None,
-            NodeRole.Generalist: None,
-            NodeRole.Synthesizer: None,
+        self.assigned_roles: dict[NodeRole, Node] = {
+            NodeRole.Domain_Expert: self._nodes[0],
+            NodeRole.Critic: self._nodes[1],
+            NodeRole.Evaluator: self._nodes[0],
+            NodeRole.Synthesizer: self._nodes[1],
         }
 
     def _reset_taken_nodes(self) -> None:
-        self.taken_roles: dict[NodeRole, Node | None] = {
-            NodeRole.Domain_Expert: None,
-            NodeRole.Critic: None,
-            NodeRole.Evaluator: None,
-            NodeRole.Generalist: None,
-            NodeRole.Synthesizer: None,
+        self.assigned_roles: dict[NodeRole, Node] = {
+            NodeRole.Domain_Expert: self._nodes[0],
+            NodeRole.Critic: self._nodes[1],
+            NodeRole.Evaluator: self._nodes[0],
+            NodeRole.Synthesizer: self._nodes[1],
         }
 
-    def _transition_nodes(self, system_one_vector: MetacognitiveVector):
+    def _transition_nodes(
+        self,
+        msv_by_role: dict[NodeRole, MetacognitiveVector],
+    ):
         self._reset_taken_nodes()
-
-        for node in self._system_two_nodes:
-            # TODO: manage role balance w/ Hungarian algo, right now use first available
-            role_preferences = node.get_role_preferences(system_one_vector)
-            sorted_role_preferences = [
-                role
-                for role, _ in sorted(
-                    role_preferences.items(), key=lambda r: r[1], reverse=True
-                )
-            ]
-            for role in sorted_role_preferences:
-                if self.taken_roles[role] == None:
-                    self.taken_roles[role] = node
-                    node.assign_role(role)
-                    break
+        # for
 
     def set_configuration(self, system_configuration: SystemConfiguration) -> None:
         self.system_configuration = system_configuration
@@ -82,39 +122,64 @@ class Orchestrator:
             ]
         )
 
+    async def _compute_metacognitive_state_vector(
+        self,
+        role: NodeRole,
+        response: str,
+        user_prompt: str,
+        historical_info: str = "",
+    ) -> tuple[MetacognitiveVector, NodeRole]:
+        return (
+            await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+                system_configuration=self.system_configuration,
+                node=self.assigned_roles[role],
+                response=response,
+                original_prompt=user_prompt,
+                knowledge_base=historical_info,
+                historical_responses=historical_info,
+            ),
+            role,
+        )
+
     async def get_metacognitive_informed_response(
         self, user_prompt: str
     ) -> SystemResponse:
+        system_one_responses: dict[NodeRole, str] = {}
         # Generate a response from the system one model and compute the metacognative state vector
-        system_one_response = await self._system_one_nodes[0].get_response(
-            user_prompt,
-            self.history,
-            "",
-            NodeRole.System_One,
-            self.system_configuration.prompts,
+        awaited_responses = await asyncio.gather(
+            *[
+                node.get_system_one_response(user_prompt, self.history, role)
+                for role, node in self.assigned_roles.items()
+            ]
         )
+        system_one_responses = {role: response for response, role in awaited_responses}
+
         historical_info = self._get_historical_info_from_chat()
-        state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
-            system_configuration=self.system_configuration,
-            node=self._system_one_nodes[0],
-            response=system_one_response,
-            original_prompt=user_prompt,
-            knowledge_base=historical_info,
-            historical_responses=historical_info,
+        awaited_msvs = await asyncio.gather(
+            *[
+                self._compute_metacognitive_state_vector(
+                    node_role, response, user_prompt, historical_info
+                )
+                for node_role, response in system_one_responses.items()
+            ]
         )
         overall_system_two_response = None
         system_two_msv = None
         node_responses = None
+        system_one_response = await self._nodes[0].summarize_system_one_response(
+            list(system_one_responses.values())
+        )
+        msv_by_role = {role: msv for msv, role in awaited_msvs}
         if MetacognitiveActivationComputation.should_engage_system_two(
             self.system_configuration.activation_computation_key,
-            state,
+            msv_by_role,
             self.system_configuration.additional_configuration,
         ):
             node_responses, overall_system_two_response, system_two_msv = (
                 await self._get_system_two_response(
                     user_prompt=user_prompt,
                     system_one_response=system_one_response,
-                    system_one_vector=state,
+                    msv_by_role=msv_by_role,
                 )
             )
 
@@ -127,7 +192,9 @@ class Orchestrator:
                 else system_one_response
             ),
             metacognitive_vector=MetacognitiveVectorResponse(
-                system_one_metacognitive_vector=state,
+                system_one_metacognitive_vector=MetacognitiveVector.msv_mean(
+                    list(msv_by_role.values())
+                ),
                 system_two_metacognitive_vector=system_two_msv,
             ),
             node_responses=node_responses,
@@ -144,7 +211,7 @@ class Orchestrator:
         self,
         user_prompt: str,
         system_one_response: str,
-        system_one_vector: MetacognitiveVector,
+        msv_by_role: dict[NodeRole, MetacognitiveVector],
     ) -> tuple:
 
         messages = [
@@ -158,21 +225,21 @@ class Orchestrator:
             {"role": "assistant", "content": system_one_response},
         ]
 
-        self._transition_nodes(system_one_vector)
+        self._transition_nodes(msv_by_role)
 
         role_responses: list[NodeResponse] = []
         previous_response = system_one_response
         previous_role = NodeRole.System_One
         synthesizer_response: str | None = None
         synthesizer_msv: MetacognitiveVector | None = None
-        for role, node in self.taken_roles.items():
+        for role, node in self.assigned_roles.items():
             if node:
                 node_response = await node.get_response(
                     user_prompt,
-                    self.history,
                     previous_response,
                     previous_role,
                     self.system_configuration.prompts,
+                    role,
                 )
 
                 state = await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
@@ -204,13 +271,17 @@ class Orchestrator:
                 }
             )
 
-            overall_system_two_response = self._system_node.client.chat(
-                model=self._system_node.model, messages=messages
-            ).message.content
+            overall_system_two_response = await self._nodes[0].get_response(
+                user_prompt,
+                previous_response,
+                previous_role,
+                self.system_configuration.prompts,
+                NodeRole.Generalist,
+            )
             state = (
                 await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
                     self.system_configuration,
-                    self._system_node,
+                    self._nodes[0],
                     overall_system_two_response if overall_system_two_response else "",
                     system_one_response,
                 )
