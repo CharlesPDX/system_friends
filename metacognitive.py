@@ -3,68 +3,71 @@ from abc import abstractmethod
 from dataclasses import dataclass, fields
 from typing import Self
 
+from pydantic import BaseModel
 
-@dataclass(unsafe_hash=True)
-class ResponseVectors:
+
+class ResponseVectors(BaseModel):
     calculated_value: int = 0
 
     @abstractmethod
     def _compute_value(self) -> int: ...
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, context) -> None:
         self.calculated_value = self._compute_value()
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
+class EmotionalResponseWeights(BaseModel):
+    weight_fear: float = 0.1
+    weight_anger: float = 0.1
+    weight_anticipation: float = 0.1
+    weight_trust: float = 0.1
+    weight_surprise: float = 0.1
+    weight_positive: float = 0.1
+    weight_negative: float = 0.1
+    weight_sadness: float = 0.1
+    weight_disgust: float = 0.1
+    weight_joy: float = 0.1
+
+
 class EmotionalResponse(ResponseVectors):
     version: str = "0.1"
 
     fear: float
-    weight_fear: float = 0.1
-
     anger: float
-    weight_anger: float = 0.1
-
     anticipation: float
-    weight_anticipation: float = 0.1
-
     trust: float
-    weight_trust: float = 0.1
-
     surprise: float
-    weight_surprise: float = 0.1
-
     positive: float
-    weight_positive: float = 0.1
-
     negative: float
-    weight_negative: float = 0.1
-
     sadness: float
-    weight_sadness: float = 0.1
-
     disgust: float
-    weight_disgust: float = 0.1
-
     joy: float
+
+    # weights: EmotionalResponseWeights
+    weight_fear: float = 0.1
+    weight_anger: float = 0.1
+    weight_anticipation: float = 0.1
+    weight_trust: float = 0.1
+    weight_surprise: float = 0.1
+    weight_positive: float = 0.1
+    weight_negative: float = 0.1
+    weight_sadness: float = 0.1
+    weight_disgust: float = 0.1
     weight_joy: float = 0.1
 
     def _compute_value(self) -> int:
-        self_fields = fields(self)
+        self_fields = EmotionalResponse.model_fields.keys()
         running_total = 0.0
         for field in self_fields:
             if (
-                field.name != "version"
-                and field.name != "calculated_value"
-                and not field.name.startswith("weight_")
+                field != "version"
+                and field != "calculated_value"
+                and not field.startswith("weight_")
             ):
-                running_total += getattr(self, field.name) * getattr(
-                    self, f"weight_{field.name}"
-                )
+                running_total += getattr(self, field) * getattr(self, f"weight_{field}")
         return min(int(running_total), 100)
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
 class CorrectnessEvaluationResponse(ResponseVectors):
     version: str = "0.1"
 
@@ -92,7 +95,6 @@ class CorrectnessEvaluationResponse(ResponseVectors):
         )
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
 class ExperientialMatchingResponse(ResponseVectors):
     version: str = "0.11"
 
@@ -120,7 +122,6 @@ class ExperientialMatchingResponse(ResponseVectors):
         )
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
 class ConflictingInformationResponse(ResponseVectors):
     version: str = "0.1"
 
@@ -145,7 +146,6 @@ class ConflictingInformationResponse(ResponseVectors):
         )
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
 class ProblemImportanceResponse(ResponseVectors):
     version: str = "0.1"
 
@@ -169,7 +169,6 @@ class ProblemImportanceResponse(ResponseVectors):
         )
 
 
-@dataclass(kw_only=True, unsafe_hash=True)
 class MetacognitiveVector(ResponseVectors):
     version: str = "0.12"
     emotional_response: EmotionalResponse
@@ -186,6 +185,9 @@ class MetacognitiveVector(ResponseVectors):
 
     problem_importance: ProblemImportanceResponse
     weight_problem_importance: float = 0.2
+
+    def __hash__(self) -> int:
+        return id(self)
 
     @property
     def uncertainty(self) -> int:
@@ -306,6 +308,7 @@ def generate_empty_msv() -> MetacognitiveVector:
         sadness=0,
         disgust=0,
         joy=0,
+        # weights=EmotionalResponseWeights(),
     )
     correctness = CorrectnessEvaluationResponse(
         logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0

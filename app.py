@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 
 import system_nodes
 from app_graph import create_system_two_node_graph
+from common import MetacognitiveComponentNames
 from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
@@ -83,7 +84,7 @@ async def get_chart(request: Request, id: str | None = None):
             system_label = f"System {system_number+1}"
             msv_response.append(
                 json.dumps(
-                    asdict(msv)
+                    msv.model_dump()
                     | {
                         "activation_result": MetacognitiveActivationComputation.get_activation_result(
                             system_configuration.activation_computation_key,
@@ -96,11 +97,11 @@ async def get_chart(request: Request, id: str | None = None):
             )
 
             data = {
-                "emotional_response": msv.emotional_response.calculated_value,
-                "correctness_evaluation": msv.correctness_evaluation.calculated_value,
-                "experiential_matching": msv.experiential_matching.calculated_value,
-                "conflicting_information": msv.conflicting_information.calculated_value,
-                "problem_importance": msv.problem_importance.calculated_value,
+                MetacognitiveComponentNames.Emotional_Response.value: msv.emotional_response.calculated_value,
+                MetacognitiveComponentNames.Correctness_Evaluation.value: msv.correctness_evaluation.calculated_value,
+                MetacognitiveComponentNames.Experiential_Matching.value: msv.experiential_matching.calculated_value,
+                MetacognitiveComponentNames.Conflicting_Information.value: msv.conflicting_information.calculated_value,
+                MetacognitiveComponentNames.Problem_Importance.value: msv.problem_importance.calculated_value,
             }
             emotional_data = _clean_values(msv.emotional_response)
             correctness_evaluation_data = _clean_values(msv.correctness_evaluation)
@@ -222,7 +223,7 @@ excluded_keys = {"calculated_value", "version"}
 def _clean_values(value) -> dict[str, int]:
     return {
         k: v
-        for k, v in asdict(value).items()
+        for k, v in value.model_dump().items()
         if k not in excluded_keys and not k.startswith("weight_")
     }
 
@@ -409,7 +410,7 @@ def _get_default_weights() -> dict[str, dict[str, float]]:
         ("problem_importance", msv.problem_importance),
     ):
         weights[x[0]] = {
-            k: v for k, v in asdict(x[1]).items() if k.startswith("weight")
+            k: v for k, v in x[1].model_dump().items() if k.startswith("weight")
         }
     return weights
 

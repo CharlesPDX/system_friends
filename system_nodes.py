@@ -9,6 +9,7 @@ import ollama
 from nrclex import NRCLex
 from pydantic import BaseModel
 
+from common import MetacognitiveComponentNames
 from config import SystemConfiguration
 from metacognitive import (
     ConflictingInformationResponse,
@@ -56,39 +57,39 @@ class Node:
     # TODO adjust weights!
     role_weights: dict[NodeRole, dict[str, float]] = {
         NodeRole.Domain_Expert: {
-            "emotional_response": 0.0,
-            "correctness_evaluation": 0.7,
-            "experiential_matching": 0.0,
-            "conflicting_information": 0.1,
-            "problem_importance": 0.2,
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.7,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.1,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
         },
         NodeRole.Critic: {
-            "emotional_response": 0.0,
-            "correctness_evaluation": 0.5,
-            "experiential_matching": 0.05,
-            "conflicting_information": 0.4,
-            "problem_importance": 0.05,
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.5,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.05,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.4,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.05,
         },
         NodeRole.Evaluator: {
-            "emotional_response": 0.0,
-            "correctness_evaluation": 0.4,
-            "experiential_matching": 0.0,
-            "conflicting_information": 0.3,
-            "problem_importance": 0.3,
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.4,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.3,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.3,
         },
         NodeRole.Generalist: {
-            "emotional_response": 0.2,
-            "correctness_evaluation": 0.2,
-            "experiential_matching": 0.2,
-            "conflicting_information": 0.2,
-            "problem_importance": 0.2,
+            MetacognitiveComponentNames.Emotional_Response.value: 0.2,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.2,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.2,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.2,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
         },
         NodeRole.Synthesizer: {
-            "emotional_response": 0.0,
-            "correctness_evaluation": 0.25,
-            "experiential_matching": 0.25,
-            "conflicting_information": 0.25,
-            "problem_importance": 0.25,
+            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
+            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.25,
+            MetacognitiveComponentNames.Experiential_Matching.value: 0.25,
+            MetacognitiveComponentNames.Conflicting_Information.value: 0.25,
+            MetacognitiveComponentNames.Problem_Importance.value: 0.25,
         },
     }
 
@@ -234,13 +235,18 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
             problem_importance,
         ) = await asyncio.gather(
             self._compute_emotional_response(
-                response, system_configuration.weights["emotional_response"]
+                response,
+                system_configuration.weights[
+                    MetacognitiveComponentNames.Emotional_Response.value
+                ],
             ),
             self._compute_correctness(
                 response,
                 original_prompt,
                 prompts,
-                system_configuration.weights["correctness_evaluation"],
+                system_configuration.weights[
+                    MetacognitiveComponentNames.Correctness_Evaluation.value
+                ],
                 node,
             ),
             self._compute_experiential_matching(
@@ -248,7 +254,9 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 knowledge_base,
                 historical_responses,
                 prompts,
-                system_configuration.weights["experiential_matching"],
+                system_configuration.weights[
+                    MetacognitiveComponentNames.Experiential_Matching.value
+                ],
                 node,
             ),
             self._compute_conflicting_information(
@@ -256,13 +264,17 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 sources,
                 temporal_info,
                 prompts,
-                system_configuration.weights["conflicting_information"],
+                system_configuration.weights[
+                    MetacognitiveComponentNames.Conflicting_Information.value
+                ],
                 node,
             ),
             self._compute_problem_importance(
                 response,
                 prompts,
-                system_configuration.weights["problem_importance"],
+                system_configuration.weights[
+                    MetacognitiveComponentNames.Problem_Importance.value
+                ],
                 node,
             ),
         )

@@ -41,7 +41,7 @@ Knowldege: {{knowledge_base}}
 History: {{historical_responses}}
 Claim: {{message}}"""
 
-    conflicting_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
+    conflicting_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions on a scale of 0 to 100: 
 a) internal consistency, which measures logical contradictions within the given information
 b) disagreement across multiple sources, which compares the given information from multiple sources
 c) consistency of information over time, which compares the given information from Temporal Information
