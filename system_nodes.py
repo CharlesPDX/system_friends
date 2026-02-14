@@ -2,14 +2,13 @@ import asyncio
 import json
 from abc import abstractmethod
 from collections import deque
-from enum import StrEnum, auto
 from typing import Self
 
 import ollama
 from nrclex import NRCLex
 from pydantic import BaseModel
 
-from common import MetacognitiveComponentNames
+from common import MetacognitiveComponentNames, NodeRole
 from config import SystemConfiguration
 from metacognitive import (
     ConflictingInformationResponse,
@@ -20,15 +19,6 @@ from metacognitive import (
     ProblemImportanceResponse,
 )
 from prompts import PromptNames, Prompts
-
-
-class NodeRole(StrEnum):
-    Domain_Expert = auto()
-    Critic = auto()
-    Evaluator = auto()
-    Generalist = auto()
-    Synthesizer = auto()
-    System_One = auto()
 
 
 class NodeResponse(BaseModel):
@@ -43,110 +33,67 @@ class NodeResponse(BaseModel):
 class Node:
     def __init__(
         self,
-        role: NodeRole = NodeRole.Generalist,
         model: str = "llama3.2",
         host: str = "localhost",
         port: str = "11434",
     ) -> None:
-        self.role = role
         server_address = f"http://{host}:{port}"
         self.client = ollama.Client(host=server_address)
         self.model = model
 
-    role: NodeRole
-    # TODO adjust weights!
-    role_weights: dict[NodeRole, dict[str, float]] = {
-        NodeRole.Domain_Expert: {
-            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
-            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.7,
-            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
-            MetacognitiveComponentNames.Conflicting_Information.value: 0.1,
-            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
-        },
-        NodeRole.Critic: {
-            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
-            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.5,
-            MetacognitiveComponentNames.Experiential_Matching.value: 0.05,
-            MetacognitiveComponentNames.Conflicting_Information.value: 0.4,
-            MetacognitiveComponentNames.Problem_Importance.value: 0.05,
-        },
-        NodeRole.Evaluator: {
-            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
-            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.4,
-            MetacognitiveComponentNames.Experiential_Matching.value: 0.0,
-            MetacognitiveComponentNames.Conflicting_Information.value: 0.3,
-            MetacognitiveComponentNames.Problem_Importance.value: 0.3,
-        },
-        NodeRole.Generalist: {
-            MetacognitiveComponentNames.Emotional_Response.value: 0.2,
-            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.2,
-            MetacognitiveComponentNames.Experiential_Matching.value: 0.2,
-            MetacognitiveComponentNames.Conflicting_Information.value: 0.2,
-            MetacognitiveComponentNames.Problem_Importance.value: 0.2,
-        },
-        NodeRole.Synthesizer: {
-            MetacognitiveComponentNames.Emotional_Response.value: 0.0,
-            MetacognitiveComponentNames.Correctness_Evaluation.value: 0.25,
-            MetacognitiveComponentNames.Experiential_Matching.value: 0.25,
-            MetacognitiveComponentNames.Conflicting_Information.value: 0.25,
-            MetacognitiveComponentNames.Problem_Importance.value: 0.25,
-        },
-    }
+    async def get_system_one_response(
+        self,
+        user_prompt: str,
+        historical_messages: deque[dict],
+        role: NodeRole,
+    ) -> tuple[str, NodeRole]:
+        response = self.client.chat(
+            model=self.model,
+            messages=list(historical_messages)
+            + [{"role": "user", "content": user_prompt}],
+        )
+        return response.message.content, role
 
-    def get_role_preferences(
-        self, system_one_vector: MetacognitiveVector
-    ) -> dict[NodeRole, float]:
-        role_preferences: dict[NodeRole, float] = {}
-        for role, weights in self.role_weights.items():
-            running_value = 0.0
-            for vector_name, weight in weights.items():
-                # maybe find a better way to do this than a really flexi-typed accessor into ResponseVectors
-                running_value += (
-                    weight * getattr(system_one_vector, vector_name).calculated_value
-                )
-            role_preferences[role] = running_value
-        return role_preferences
-
-    def assign_role(self, new_role: NodeRole) -> None:
-        # TODO? keep role history?
-        # TODO? update role weights?
-        self.role = new_role
+    async def summarize_system_one_response(self, responses: list[str]) -> str:
+        response = self.client.chat(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Please summarize the following responses into a single response to the user: {'\n'.join(responses)}",
+                }
+            ],
+        )
+        return response.message.content
 
     async def get_response(
         self,
         user_prompt: str,
-        historical_messages: deque[dict],
         previous_node_response: str,
         previous_node_role: NodeRole,
         prompts: Prompts,
+        role: NodeRole,
     ) -> str:
-        if self.role == NodeRole.System_One:
-            response = self.client.chat(
-                model=self.model,
-                messages=list(historical_messages)
-                + [{"role": "user", "content": user_prompt}],
-            )
-        else:
-            messages = [
-                {
-                    "role": "system",
-                    "content": prompts.get_prompt(
-                        PromptNames(f"{self.role}_system"),
-                        context={"previous_node_role": previous_node_role},
-                    ),
-                    "thinking": "true",
-                },
-                {"role": "assistant", "content": previous_node_response},
-                {
-                    "role": "user",
-                    "content": prompts.get_prompt(
-                        PromptNames(f"{self.role}_user"),
-                        context={"user_prompt": user_prompt},
-                    ),
-                },
-            ]
+        messages = [
+            {
+                "role": "system",
+                "content": prompts.get_prompt(
+                    PromptNames(f"{role}_system"),
+                    context={"previous_node_role": previous_node_role},
+                ),
+                "thinking": "true",
+            },
+            {"role": "assistant", "content": previous_node_response},
+            {
+                "role": "user",
+                "content": prompts.get_prompt(
+                    PromptNames(f"{role}_user"),
+                    context={"user_prompt": user_prompt},
+                ),
+            },
+        ]
 
-            response = self.client.chat(model=self.model, messages=messages)
+        response = self.client.chat(model=self.model, messages=messages)
         return response.message.content
 
 
@@ -400,9 +347,13 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         try:
             parsed_response = json.loads(response.message.content)
             return ConflictingInformationResponse(
-                internal_consistency=float(parsed_response["internal_consistency"]),
-                source_agreement=float(parsed_response["source_agreement"]),
-                temporal_stability=float(parsed_response["temporal_stability"]),
+                internal_consistency=float(
+                    parsed_response.get("internal_consistency", 0.0)
+                ),
+                source_agreement=float(parsed_response.get("source_agreement", 0.0)),
+                temporal_stability=float(
+                    parsed_response.get("temporal_stability", 0.0)
+                ),
                 **weights,
             )
         except:
