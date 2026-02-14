@@ -72,7 +72,7 @@ class EmotionalResponse(ResponseVectors):
 
 
 @dataclass(kw_only=True, unsafe_hash=True)
-class CorrectnessResponse(ResponseVectors):
+class CorrectnessEvaluationResponse(ResponseVectors):
     version: str = "0.1"
 
     # Sum of weights should be 1
@@ -128,7 +128,7 @@ class ExperientialMatchingResponse(ResponseVectors):
 
 
 @dataclass(kw_only=True, unsafe_hash=True)
-class ConflictInformation(ResponseVectors):
+class ConflictingInformationResponse(ResponseVectors):
     version: str = "0.1"
 
     # Sum of weights should be 1
@@ -153,7 +153,7 @@ class ConflictInformation(ResponseVectors):
 
 
 @dataclass(kw_only=True, unsafe_hash=True)
-class ProblemImportance(ResponseVectors):
+class ProblemImportanceResponse(ResponseVectors):
     version: str = "0.1"
 
     potential_consequences: float
@@ -178,33 +178,44 @@ class ProblemImportance(ResponseVectors):
 
 @dataclass(kw_only=True, unsafe_hash=True)
 class MetacognitiveVector(ResponseVectors):
-    version: str = "0.11"
+    version: str = "0.12"
     emotional_response: EmotionalResponse
     weight_emotional_response: float = 0.2
 
-    correctness: CorrectnessResponse
-    weight_correctness: float = 0.2
+    correctness_evaluation: CorrectnessEvaluationResponse
+    weight_correctness_evaluation: float = 0.2
 
     experiential_matching: ExperientialMatchingResponse
     weight_experiential_matching: float = 0.2
 
-    conflict_information: ConflictInformation
-    weight_conflict_information: float = 0.2
+    conflicting_information: ConflictingInformationResponse
+    weight_conflicting_information: float = 0.2
 
-    problem_importance: ProblemImportance
+    problem_importance: ProblemImportanceResponse
     weight_problem_importance: float = 0.2
+
+    @property
+    def uncertainty(self) -> int:
+        return min(100 - self.correctness_evaluation.calculated_value, 0)
+
+    @property
+    def novelty(self) -> int:
+        return min(100 - self.experiential_matching.calculated_value, 0)
 
     def _compute_value(self) -> int:
         return int(
             (self.emotional_response._compute_value() * self.weight_emotional_response)
-            + (self.correctness._compute_value() * self.weight_correctness)
+            + (
+                self.correctness_evaluation._compute_value()
+                * self.weight_correctness_evaluation
+            )
             + (
                 self.experiential_matching._compute_value()
                 * self.weight_experiential_matching
             )
             + (
-                self.conflict_information._compute_value()
-                * self.weight_conflict_information
+                self.conflicting_information._compute_value()
+                * self.weight_conflicting_information
             )
             + (
                 self.problem_importance._compute_value()
@@ -367,14 +378,14 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         prompts = Prompts()
         (
             emotional_response,
-            correctness,
+            correctness_evaluation,
             experiential_matching,
-            conflict_information,
+            conflicting_information,
             problem_importance,
         ) = await asyncio.gather(
             self._compute_emotional_response(response, weights["emotional_response"]),
             self._compute_correctness(
-                response, original_prompt, prompts, weights["correctness"]
+                response, original_prompt, prompts, weights["correctness_evaluation"]
             ),
             self._compute_experiential_matching(
                 response,
@@ -388,7 +399,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 sources,
                 temporal_info,
                 prompts,
-                weights["conflict_information"],
+                weights["conflicting_information"],
             ),
             self._compute_problem_importance(
                 response, prompts, weights["problem_importance"]
@@ -397,9 +408,9 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
 
         return MetacognitiveVector(
             emotional_response=emotional_response,
-            correctness=correctness,
+            correctness_evaluation=correctness_evaluation,
             experiential_matching=experiential_matching,
-            conflict_information=conflict_information,
+            conflicting_information=conflicting_information,
             problem_importance=problem_importance,
             **weights["msv_weights"],
         )
@@ -428,9 +439,9 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         original_prompt: str,
         prompts: Prompts,
         weights: dict[str, float],
-    ) -> CorrectnessResponse:
+    ) -> CorrectnessEvaluationResponse:
         content = prompts.get_prompt(
-            PromptNames.Correctness,
+            PromptNames.Correctness_Evaluation,
             {"original_prompt": original_prompt, "message": message},
         )
         response = ollama.chat(
@@ -438,7 +449,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         )
         try:
             parsed_response = json.loads(response.message.content)
-            return CorrectnessResponse(
+            return CorrectnessEvaluationResponse(
                 logical_consistency=parsed_response["logical_consistency"],
                 factual_accuracy=int(parsed_response["factual_accuracy"]),
                 contextual_appropriateness=int(
@@ -447,7 +458,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 **weights,
             )
         except:
-            return CorrectnessResponse(
+            return CorrectnessEvaluationResponse(
                 logical_consistency=0.0,
                 factual_accuracy=0.0,
                 contextual_appropriateness=0.0,
@@ -502,9 +513,9 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         temporal_info: str,
         prompts: Prompts,
         weights: dict[str, float],
-    ) -> ConflictInformation:
+    ) -> ConflictingInformationResponse:
         content = prompts.get_prompt(
-            PromptNames.Conflict_Information,
+            PromptNames.Conflicting_Information,
             {"sources": sources, "message": message, "temporal_info": temporal_info},
         )
         response = ollama.chat(
@@ -512,14 +523,14 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         )
         try:
             parsed_response = json.loads(response.message.content)
-            return ConflictInformation(
+            return ConflictingInformationResponse(
                 internal_consistency=float(parsed_response["internal_consistency"]),
                 source_agreement=float(parsed_response["source_agreement"]),
                 temporal_stability=float(parsed_response["temporal_stability"]),
                 **weights,
             )
         except:
-            return ConflictInformation(
+            return ConflictingInformationResponse(
                 internal_consistency=0.0,
                 source_agreement=0.0,
                 temporal_stability=0.0,
@@ -528,7 +539,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
 
     async def _compute_problem_importance(
         self, original_prompt: str, prompts: Prompts, weights: dict[str, float]
-    ) -> ProblemImportance:
+    ) -> ProblemImportanceResponse:
         content = prompts.get_prompt(
             PromptNames.Problem_Importance, {"original_prompt": original_prompt}
         )
@@ -537,14 +548,14 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         )
         try:
             parsed_response = json.loads(response.message.content)
-            return ProblemImportance(
+            return ProblemImportanceResponse(
                 potential_consequences=float(parsed_response["potential_consequences"]),
                 temporal_urgency=float(parsed_response["temporal_urgency"]),
                 scope_of_impact=float(parsed_response["scope_of_impact"]),
                 **weights,
             )
         except:
-            return ProblemImportance(
+            return ProblemImportanceResponse(
                 potential_consequences=0.0,
                 temporal_urgency=0.0,
                 scope_of_impact=0.0,
@@ -565,7 +576,7 @@ def generate_empty_msv() -> MetacognitiveVector:
         disgust=0,
         joy=0,
     )
-    correctness = CorrectnessResponse(
+    correctness = CorrectnessEvaluationResponse(
         logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0
     )
     experiential_matching = ExperientialMatchingResponse(
@@ -573,17 +584,17 @@ def generate_empty_msv() -> MetacognitiveVector:
         historical_responses_matching=0.0,
         cue_familiarity=0.0,
     )
-    conflict_information = ConflictInformation(
+    conflicting_information = ConflictingInformationResponse(
         internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0
     )
-    problem_importance = ProblemImportance(
+    problem_importance = ProblemImportanceResponse(
         potential_consequences=0.0, temporal_urgency=0.0, scope_of_impact=0.0
     )
 
     return MetacognitiveVector(
         emotional_response=emotional_response,
-        correctness=correctness,
+        correctness_evaluation=correctness,
         experiential_matching=experiential_matching,
-        conflict_information=conflict_information,
+        conflicting_information=conflicting_information,
         problem_importance=problem_importance,
     )

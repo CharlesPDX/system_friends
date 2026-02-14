@@ -5,9 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PromptNames(StrEnum):
-    Correctness = "correctness_prompt"
+    Correctness_Evaluation = "correctness_evaluation_prompt"
     Experiential_Matching = "experiential_matching_prompt"
-    Conflict_Information = "conflict_information_prompt"
+    Conflicting_Information = "conflicting_information_prompt"
     Problem_Importance = "problem_importance_prompt"
     System_Two_System = "system_two_system_prompt"
     System_Two_User = "system_two_user_prompt"
@@ -26,7 +26,7 @@ class PromptNames(StrEnum):
 class Prompts(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    correctness_prompt: str = """Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? 
+    correctness_evaluation_prompt: str = """Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? 
 Consider the contextual appropriateness with the given context. 
 Assess each dimension from 0 to 100 and return the response in JSON format {"logical_consistency": "logical consistency", "factual_accuracy": "factual accuracy", "contextual_appropriateness": "contextual appropriateness"}, 
 do not include any additional text.
@@ -41,7 +41,7 @@ Knowldege: {{knowledge_base}}
 History: {{historical_responses}}
 Claim: {{message}}"""
 
-    conflict_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
+    conflicting_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
 a) internal consistency, which measures logical contradictions within the given information
 b) disagreement across multiple sources, which compares the given information from multiple sources
 c) consistency of information over time, which compares the given information from Temporal Information

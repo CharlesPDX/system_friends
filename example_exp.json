@@ -8,7 +8,7 @@
 			],
 			"configuration": {
 				"prompts": {
-					"correctness_prompt": "Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? \nConsider the contextual appropriateness with the given context. \nAssess each dimension from 0 to 100 and return the response in JSON format {\"logical_consistency\": \"logical consistency\", \"factual_accuracy\": \"factual accuracy\", \"contextual_appropriateness\": \"contextual appropriateness\"}, \ndo not include any additional text.\nContext: {{original_prompt}}\nClaim: {{message}}",
+					"correctness_evaluation_prompt": "Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? \nConsider the contextual appropriateness with the given context. \nAssess each dimension from 0 to 100 and return the response in JSON format {\"logical_consistency\": \"logical consistency\", \"factual_accuracy\": \"factual accuracy\", \"contextual_appropriateness\": \"contextual appropriateness\"}, \ndo not include any additional text.\nContext: {{original_prompt}}\nClaim: {{message}}",
 					"experiential_matching_prompt": "You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.\nConsider the given knowledge as the knowledge base, the given history as the historical responses.\nMeasure the matching level from 0 to 100, which is the lowest to the highest.\nReturn the response in JSON format {\"knowledge_base_matching\": \"knowledge base matching\", \"historical_responses_matching\": \"historical responses matching\"}; do not include any additional text.\nKnowldege: {{knowledge_base}}\nHistory: {{historical_responses}}\nClaim: {{message}}",
 					"conflict_information_prompt": "You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: \na) internal consistency, which measures logical contradictions within the given information\nb) disagreement across multiple sources, which compares the given information from multiple sources\nc) consistency of information over time, which compares the given information from Temporal Information\nReturn the response in JSON format {\"internal_consistency\": \"internal consistency\", \"source_agreement\": \"source agreement\", \"temporal_stability\": \"temporal stability\"}; do not include any additional text.\nInformation: {{message}}\nSources:{{sources}}\nTemporal Information: {{temporal_info}}\n",
 					"problem_importance_prompt": "How would you assess the User Prompt for problem importance on the dimensions of potential consequences, temporal urgency, and scope of impact? \nAssess each dimension from 0 to 100 and return the response in JSON format {\"potential_consequences\": \"potential consequences\", \"temporal_urgency\": \"temporal urgency\", \"scope_of_impact\": \"scope of impact\"}, \ndo not include any additional text.\nUser Prompt: {{original_prompt}}",
@@ -28,9 +28,9 @@
 				"weights": {
 					"msv_weights": {
 						"weight_emotional_response": 0.2,
-						"weight_correctness": 0.2,
+						"weight_correctness_evaluation": 0.2,
 						"weight_experiential_matching": 0.2,
-						"weight_conflict_information": 0.2,
+						"weight_conflicting_information": 0.2,
 						"weight_problem_importance": 0.2
 					},
 					"emotional_response": {
@@ -45,16 +45,17 @@
 						"weight_disgust": 0.1,
 						"weight_joy": 0.1
 					},
-					"correctness": {
+					"correctness_evaluation": {
 						"weight_logical_consistency": 0.3,
 						"weight_factual_accuracy": 0.4,
 						"weight_contextual_appropriateness": 0.3
 					},
 					"experiential_matching": {
-						"weight_knowledge_base_matching": 0.5,
-						"weight_historical_responses_matching": 0.5
+						"weight_knowledge_base_matching": 0.3,
+						"weight_historical_responses_matching": 0.3,
+						"weight_cue_familiarity": 0.4
 					},
-					"conflict_information": {
+					"conflicting_information": {
 						"weight_internal_consistency": 0.3,
 						"weight_source_agreement": 0.4,
 						"weight_temporal_stability": 0.3

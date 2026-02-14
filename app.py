@@ -1,6 +1,7 @@
 import argparse
 import json
 import math
+import traceback
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -66,9 +67,9 @@ selected_nodes: list[system_two_model.NodeResponse] = []
 class ChartNames(StrEnum):
     overall_msv = "Overall MSV"
     emotional_response = "Emotional Response"
-    correctness = "Correctness"
+    correctness_evaluation = "Correctness Evaluation"
     experiential_matching = "Experiential Matching"
-    conflict_information = "Conflict Information"
+    conflicting_information = "Conflicting Information"
     problem_importance = "Problem Importance"
 
 
@@ -98,15 +99,15 @@ async def get_chart(request: Request, id: str | None = None):
 
             data = {
                 "emotional_response": msv.emotional_response.calculated_value,
-                "correctness": msv.correctness.calculated_value,
+                "correctness_evaluation": msv.correctness_evaluation.calculated_value,
                 "experiential_matching": msv.experiential_matching.calculated_value,
-                "conflict_information": msv.conflict_information.calculated_value,
+                "conflicting_information": msv.conflicting_information.calculated_value,
                 "problem_importance": msv.problem_importance.calculated_value,
             }
             emotional_data = _clean_values(msv.emotional_response)
-            correctness_data = _clean_values(msv.correctness)
+            correctness_evaluation_data = _clean_values(msv.correctness_evaluation)
             experiential_matching_data = _clean_values(msv.experiential_matching)
-            conflict_information_data = _clean_values(msv.conflict_information)
+            conflicting_information_data = _clean_values(msv.conflicting_information)
             problem_importance_data = _clean_values(msv.problem_importance)
 
             # Create a Bokeh plot
@@ -117,7 +118,7 @@ async def get_chart(request: Request, id: str | None = None):
                 emotional_data, "Emotion Components", f"{system_label} Emotion Vector"
             )
             correctness_chart = _generate_chart(
-                correctness_data,
+                correctness_evaluation_data,
                 "Correctness Components",
                 f"{system_label} Correctness Vector",
             )
@@ -127,9 +128,9 @@ async def get_chart(request: Request, id: str | None = None):
                 f"{system_label} Experiential Vector",
             )
             conflict_chart = _generate_chart(
-                conflict_information_data,
-                "Conflict Components",
-                f"{system_label} Conflict Vector",
+                conflicting_information_data,
+                "Conflicting Components",
+                f"{system_label} Conflicting Vector",
             )
             problem_importance_chart = _generate_chart(
                 problem_importance_data,
@@ -144,7 +145,7 @@ async def get_chart(request: Request, id: str | None = None):
                 emotional_data, "Emotion Components", f"{system_label} Emotion Vector"
             )
             bar_correctness_chart = _generate_bar_chart(
-                correctness_data,
+                correctness_evaluation_data,
                 "Correctness Components",
                 f"{system_label} Correctness Vector",
             )
@@ -154,9 +155,9 @@ async def get_chart(request: Request, id: str | None = None):
                 f"{system_label} Experiential Vector",
             )
             bar_conflict_chart = _generate_bar_chart(
-                conflict_information_data,
-                "Conflict Components",
-                f"{system_label} Conflict Vector",
+                conflicting_information_data,
+                "Conflicting Components",
+                f"{system_label} Conflicting Vector",
             )
             bar_problem_importance_chart = _generate_bar_chart(
                 problem_importance_data,
@@ -169,9 +170,9 @@ async def get_chart(request: Request, id: str | None = None):
                 {
                     ChartNames.overall_msv.value: msv_components_chart,
                     ChartNames.emotional_response.value: emotion_chart,
-                    ChartNames.correctness.value: correctness_chart,
+                    ChartNames.correctness_evaluation.value: correctness_chart,
                     ChartNames.experiential_matching.value: experiential_chart,
-                    ChartNames.conflict_information.value: conflict_chart,
+                    ChartNames.conflicting_information.value: conflict_chart,
                     ChartNames.problem_importance.value: problem_importance_chart,
                 }
             )
@@ -179,9 +180,9 @@ async def get_chart(request: Request, id: str | None = None):
                 {
                     ChartNames.overall_msv.value: bar_msv_components_chart,
                     ChartNames.emotional_response.value: bar_emotion_chart,
-                    ChartNames.correctness.value: bar_correctness_chart,
+                    ChartNames.correctness_evaluation.value: bar_correctness_chart,
                     ChartNames.experiential_matching.value: bar_experiential_chart,
-                    ChartNames.conflict_information.value: bar_conflict_chart,
+                    ChartNames.conflicting_information.value: bar_conflict_chart,
                     ChartNames.problem_importance.value: bar_problem_importance_chart,
                 }
             )
@@ -430,6 +431,7 @@ async def run_system_one(user_input: str) -> tuple[str, str]:
 
         return system_response
     except Exception as e:
+        print(traceback.format_exc())
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
 

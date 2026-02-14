@@ -38,9 +38,9 @@ class SystemConfiguration(BaseModel):
         for x in (
             ("msv_weights", msv),
             ("emotional_response", msv.emotional_response),
-            ("correctness", msv.correctness),
+            ("correctness_evaluation", msv.correctness_evaluation),
             ("experiential_matching", msv.experiential_matching),
-            ("conflict_information", msv.conflict_information),
+            ("conflicting_information", msv.conflicting_information),
             ("problem_importance", msv.problem_importance),
         ):
             weights[x[0]] = {
