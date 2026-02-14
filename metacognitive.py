@@ -101,14 +101,17 @@ class CorrectnessResponse(ResponseVectors):
 
 @dataclass(kw_only=True, unsafe_hash=True)
 class ExperientialMatchingResponse(ResponseVectors):
-    version: str = "0.1"
+    version: str = "0.11"
 
     # Weights are adaptive based on context. Should there be constraints on weights?
     knowledge_base_matching: float
-    weight_knowledge_base_matching: float = 0.5
+    weight_knowledge_base_matching: float = 0.3
 
     historical_responses_matching: float
-    weight_historical_responses_matching: float = 0.5
+    weight_historical_responses_matching: float = 0.3
+
+    cue_familiarity: float
+    weight_cue_familiarity: float = 0.4
 
     def _compute_value(self) -> int:
         # This calculation assumes the matching values are in the range of [0,100]
@@ -481,12 +484,14 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
                 historical_responses_matching=float(
                     parsed_response["historical_responses_matching"]
                 ),
+                cue_familiarity=float(parsed_response["cue_familiarity"]),
                 **weights,
             )
         except:
             return ExperientialMatchingResponse(
                 knowledge_base_matching=0.0,
                 historical_responses_matching=0.0,
+                cue_familiarity=0.0,
                 **weights,
             )
 
@@ -564,7 +569,9 @@ def generate_empty_msv() -> MetacognitiveVector:
         logical_consistency=0.0, factual_accuracy=0.0, contextual_appropriateness=0.0
     )
     experiential_matching = ExperientialMatchingResponse(
-        knowledge_base_matching=0.0, historical_responses_matching=0.0
+        knowledge_base_matching=0.0,
+        historical_responses_matching=0.0,
+        cue_familiarity=0.0,
     )
     conflict_information = ConflictInformation(
         internal_consistency=0.0, source_agreement=0.0, temporal_stability=0.0
