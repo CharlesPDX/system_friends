@@ -3,7 +3,7 @@ import statistics
 from abc import abstractmethod
 from typing import Self, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from common import NodeRole
 
@@ -210,13 +210,15 @@ class MetacognitiveVector(ResponseVectors):
     def __hash__(self) -> int:
         return id(self)
 
+    @computed_field
     @property
     def uncertainty(self) -> int:
-        return min(100 - self.correctness_evaluation.calculated_value, 0)
+        return max(100 - self.correctness_evaluation.calculated_value, 0)
 
+    @computed_field
     @property
     def novelty(self) -> int:
-        return min(100 - self.experiential_matching.calculated_value, 0)
+        return max(100 - self.experiential_matching.calculated_value, 0)
 
     def _compute_value(self) -> int:
         return int(
