@@ -1,3 +1,6 @@
+# ignore specific config
+nodes.json
+
 # ignore sqlite files
 *.sqlite3
 

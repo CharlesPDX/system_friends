@@ -1,13 +1,24 @@
 import asyncio
 from collections import deque
+from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from common import MetacognitiveComponentNames
 from config import SystemConfiguration
 from metacognitive import MetacognitiveActivationComputation, MetacognitiveVector
 from prompts import PromptNames
 from system_nodes import MetacognitiveVectorComputation, Node, NodeResponse, NodeRole
+
+
+class NodeConfig(BaseModel):
+    host: str
+    port: str = Field(default="11434")
+    model: str
+
+
+class NodesConfig(BaseModel):
+    nodes: list[NodeConfig]
 
 
 class MetacognitiveVectorResponse(BaseModel):
@@ -81,24 +92,46 @@ class Orchestrator:
 
     def __init__(self, system_configuration: SystemConfiguration):
         self.system_configuration = system_configuration
-        self._nodes = [
-            Node(),
-            Node(),
-        ]
-        self.assigned_roles: dict[NodeRole, Node] = {
-            NodeRole.Domain_Expert: self._nodes[0],
-            NodeRole.Critic: self._nodes[1],
-            NodeRole.Evaluator: self._nodes[0],
-            NodeRole.Synthesizer: self._nodes[1],
-        }
+        nodes_config = None
+        if Path("nodes.json").exists:
+            with open("nodes.json") as nodes_config_file:
+                nodes_config = NodesConfig.model_validate_json(nodes_config_file.read())
+
+        if nodes_config:
+            self._nodes = [
+                Node(
+                    host=node_config.host,
+                    port=node_config.port,
+                    model=node_config.model,
+                )
+                for node_config in nodes_config.nodes
+            ]
+        else:
+            self._nodes = [
+                Node(),
+            ]
+        self.assigned_roles: dict[NodeRole, Node] = {}
+        number_of_available_nodes = len(self._nodes)
+        for role_index, role in enumerate(
+            [
+                NodeRole.Domain_Expert,
+                NodeRole.Critic,
+                NodeRole.Evaluator,
+                NodeRole.Synthesizer,
+            ]
+        ):
+            self.assigned_roles[role] = self._nodes[
+                role_index % number_of_available_nodes
+            ]
 
     def _reset_taken_nodes(self) -> None:
-        self.assigned_roles: dict[NodeRole, Node] = {
-            NodeRole.Domain_Expert: self._nodes[0],
-            NodeRole.Critic: self._nodes[1],
-            NodeRole.Evaluator: self._nodes[0],
-            NodeRole.Synthesizer: self._nodes[1],
-        }
+        pass  # no-op for now
+        # self.assigned_roles: dict[NodeRole, Node] = {
+        #     NodeRole.Domain_Expert: self._nodes[0],
+        #     NodeRole.Critic: self._nodes[1],
+        #     NodeRole.Evaluator: self._nodes[2],
+        #     NodeRole.Synthesizer: self._nodes[1],
+        # }
 
     def _transition_nodes(
         self,
