@@ -99,13 +99,13 @@ class Orchestrator:
     def __init__(self, system_configuration: SystemConfiguration):
         self.system_configuration = system_configuration
         nodes_config = None
-        if Path("nodes.json").exists:
+        if Path("nodes.json").exists():
             with open("nodes.json") as nodes_config_file:
                 nodes_config = NodesConfig.model_validate_json(nodes_config_file.read())
 
         pipeline_length = len(self._dialectic_pipeline)
 
-        if nodes_config:
+        if nodes_config and nodes_config.nodes:
             self._nodes = [
                 Node(
                     host=node_config.host,
@@ -129,9 +129,7 @@ class Orchestrator:
                 config_node_index %= config_nodes_index_limit
 
         else:
-            self._nodes = [
-                Node(),
-            ] * pipeline_length
+            self._nodes = [Node() for _ in enumerate(self._dialectic_pipeline)]
 
         self.assigned_roles: defaultdict[NodeRole, list[Node]] = defaultdict(list)
         number_of_available_nodes = len(self._nodes)
@@ -177,7 +175,6 @@ class Orchestrator:
                 assignment[role] = row
                 total_fitness += fitness_scores[row][role]
                 self.assigned_roles[role].append(self._nodes[row])
-        print()
 
     def set_configuration(self, system_configuration: SystemConfiguration) -> None:
         self.system_configuration = system_configuration
@@ -360,7 +357,18 @@ class Orchestrator:
                 )
             )
             previous_role = role
+            previous_state = [state for state, _ in all_states]
             messages.append({"role": "assistant", "content": previous_response})
+
+            # basic early stopping implementation
+            mean_state = MetacognitiveVector.msv_mean(
+                list([msv for msv in previous_state])
+            )
+            if (
+                mean_state.correctness_evaluation.calculated_value >= 85
+                or mean_state.conflicting_information.calculated_value <= 20
+            ):
+                break
 
         overall_system_two_response = previous_response
         state = (
