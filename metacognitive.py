@@ -217,7 +217,7 @@ class MetacognitiveVector(ResponseVectors):
 
     @computed_field
     @property
-    def novelty(self) -> int:
+    def unfamiliarity(self) -> int:
         return max(100 - self.experiential_matching.calculated_value, 0)
 
     def _compute_value(self) -> int:
