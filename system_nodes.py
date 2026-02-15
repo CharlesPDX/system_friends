@@ -46,15 +46,15 @@ class Node:
         user_prompt: str,
         historical_messages: deque[dict],
         role: NodeRole,
-    ) -> tuple[str, NodeRole]:
+    ) -> tuple[str, NodeRole, Self]:
         response = await self.client.chat(
             model=self.model,
             messages=list(historical_messages)
             + [{"role": "user", "content": user_prompt}],
         )
-        return response.message.content, role
+        return response.message.content, role, self
 
-    async def summarize_system_one_response(self, responses: list[str]) -> str:
+    async def summarize_responses(self, responses: list[str]) -> str:
         response = await self.client.chat(
             model=self.model,
             messages=[
@@ -73,7 +73,7 @@ class Node:
         previous_node_role: NodeRole,
         prompts: Prompts,
         role: NodeRole,
-    ) -> str:
+    ) -> tuple[str, Self]:
         messages = [
             {
                 "role": "system",
@@ -94,7 +94,7 @@ class Node:
         ]
 
         response = await self.client.chat(model=self.model, messages=messages)
-        return response.message.content
+        return response.message.content, self
 
 
 class MetacognitiveVectorComputation:
@@ -122,7 +122,7 @@ class MetacognitiveVectorComputation:
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
-    ) -> MetacognitiveVector:
+    ) -> tuple[MetacognitiveVector, Node]:
         if system_configuration.vector_computation_key not in cls._registry:
             raise KeyError(
                 f"No subclass registered with key '{system_configuration.vector_computation_key}'"
@@ -156,7 +156,7 @@ class MetacognitiveVectorComputation:
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
-    ) -> MetacognitiveVector: ...
+    ) -> tuple[MetacognitiveVector, Node]: ...
 
 
 class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
@@ -172,7 +172,7 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
         historical_responses: str = "",
         sources: str = "",
         temporal_info: str = "",
-    ) -> MetacognitiveVector:
+    ) -> tuple[MetacognitiveVector, Node]:
         prompts = system_configuration.prompts
         (
             emotional_response,
@@ -226,13 +226,16 @@ class BaselineMetacognitiveVectorComputation(MetacognitiveVectorComputation):
             ),
         )
 
-        return MetacognitiveVector(
-            emotional_response=emotional_response,
-            correctness_evaluation=correctness_evaluation,
-            experiential_matching=experiential_matching,
-            conflicting_information=conflicting_information,
-            problem_importance=problem_importance,
-            **system_configuration.weights["msv_weights"],
+        return (
+            MetacognitiveVector(
+                emotional_response=emotional_response,
+                correctness_evaluation=correctness_evaluation,
+                experiential_matching=experiential_matching,
+                conflicting_information=conflicting_information,
+                problem_importance=problem_importance,
+                **system_configuration.weights["msv_weights"],
+            ),
+            node,
         )
 
     async def _compute_emotional_response(

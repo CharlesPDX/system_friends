@@ -286,7 +286,7 @@ class MetacognitiveActivationComputation:
     def should_engage_system_two(
         cls,
         compute_method: str,
-        msv_by_role: dict[NodeRole, MetacognitiveVector],
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
         additional_config: dict = {},
     ) -> bool:
         if compute_method not in cls._registry:
@@ -315,7 +315,7 @@ class MetacognitiveActivationComputation:
     @abstractmethod
     def _should_engage_system_two(
         self,
-        msv_by_role: dict[NodeRole, MetacognitiveVector],
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
         additional_config: dict = {},
     ) -> bool: ...
 
@@ -338,12 +338,12 @@ class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputat
 
     def _should_engage_system_two(
         self,
-        msv_by_role: dict[NodeRole, MetacognitiveVector],
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
         additional_config: dict = {},
     ) -> bool:
-        activation_value = self._activation_function(
-            self._mean_msv(list(msv_by_role.values()))
-        )
+        # Flatten msv by role to just a list of MSV
+        all_msvs = [msv for msvs in msv_by_role.values() for msv in msvs]
+        activation_value = self._activation_function(self._mean_msv(all_msvs))
         return activation_value >= additional_config.get(
             "activation_threshold", self.activation_threshold
         )
