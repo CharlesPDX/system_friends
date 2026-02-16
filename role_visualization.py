@@ -285,7 +285,7 @@ def create_role_pipeline_graph(
         const indices = source.selected.indices;
         if (indices.length > 0) {
             const nodeId = source.data['node_id'][indices[0]];
-            htmx.ajax('GET', '/role_node/' + nodeId, {
+            htmx.ajax('GET', '/node/' + nodeId, {
                 target: '#node-info',
                 swap: 'innerHTML'
             });
@@ -635,7 +635,7 @@ def create_role_pipeline_components(
     assignment_result: AssignmentResult | None = None,
     routing_result: RoutingResult | None = None,
     generalist_annotation: str | None = None,
-) -> dict[str, tuple]:
+) -> tuple[dict[str, tuple], list[NodeResponse]]:
     """
     Create all visualizations and return as Bokeh component dict.
 
@@ -680,4 +680,4 @@ def create_role_pipeline_components(
         )
         result["routing_gauge"] = components(gauge)
 
-    return result
+    return result, nodes

@@ -76,7 +76,6 @@ async def get_chart(request: Request, id: str | None = None):
     msv_response = []
     msv_graphs = []
     msv_bar_graphs = []
-    system_two_graph_components = ("", "")
     viz_components = {}
     result = None
 
@@ -190,7 +189,8 @@ async def get_chart(request: Request, id: str | None = None):
             msv_bar_graphs.append(bar_parts)
 
         result = system_state[id]
-        viz_components = create_role_pipeline_components(
+        global selected_nodes
+        viz_components, selected_nodes = create_role_pipeline_components(
             role_responses=result.node_responses or [],
             assignment_result=result.assignment,
             routing_result=result.routing,
