@@ -7,6 +7,8 @@ class MetacognitiveComponentNames(StrEnum):
     Experiential_Matching = "experiential_matching"
     Conflicting_Information = "conflicting_information"
     Problem_Importance = "problem_importance"
+    Uncertainty = "uncertainty"
+    Unfamiliarity = "unfamiliarity"
 
 
 class NodeRole(StrEnum):

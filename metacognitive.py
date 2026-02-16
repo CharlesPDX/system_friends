@@ -1,13 +1,23 @@
 import math
 import statistics
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import Self, TypeVar
 
 from pydantic import BaseModel, computed_field
 
-from common import NodeRole
+from common import MetacognitiveComponentNames, NodeRole
 
 T = TypeVar("T", bound=BaseModel)
+
+
+@dataclass
+class RoutingResult:
+    activation_value: float
+    activation_threshold: float
+    engage_system_two: bool
+
+    small_dimension_activation_components: dict[str, int]
 
 
 class ResponseVectors(BaseModel):
@@ -312,6 +322,22 @@ class MetacognitiveActivationComputation:
             metacognitive_vector, additional_config
         )
 
+    @classmethod
+    def get_routing_result(
+        cls,
+        compute_method: str,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+        additional_config: dict = {},
+    ) -> RoutingResult:
+        if compute_method not in cls._registry:
+            raise KeyError(f"No subclass registered with key '{compute_method}'")
+        if compute_method not in cls._instances:
+            cls._instances[compute_method] = cls._registry[compute_method]()
+
+        return cls._instances[compute_method]._get_routing_result(
+            msv_by_role, additional_config
+        )
+
     @abstractmethod
     def _should_engage_system_two(
         self,
@@ -326,9 +352,16 @@ class MetacognitiveActivationComputation:
         additional_config: dict = {},
     ) -> str: ...
 
+    @abstractmethod
+    def _get_routing_result(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+        additional_config: dict = {},
+    ) -> RoutingResult: ...
+
 
 class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputation):
-    compute_method = "baseline"
+    compute_method = "webconf"  # "baseline"
     activation_threshold: float = 0.1
 
     def _mean_msv(self, metacognitive_vectors: list[MetacognitiveVector]) -> int:
@@ -336,17 +369,25 @@ class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputat
             statistics.mean([msv.calculated_value for msv in metacognitive_vectors])
         )
 
+    def _get_activation_threshold(self, additional_config: dict = {}):
+        return additional_config.get("activation_threshold", self.activation_threshold)
+
+    def _get_activation_value(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+    ) -> float:
+        # Flatten msv by role to just a list of MSV
+        all_msvs = [msv for msvs in msv_by_role.values() for msv in msvs]
+        activation_value = self._activation_function(self._mean_msv(all_msvs))
+        return activation_value
+
     def _should_engage_system_two(
         self,
         msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
         additional_config: dict = {},
     ) -> bool:
-        # Flatten msv by role to just a list of MSV
-        all_msvs = [msv for msvs in msv_by_role.values() for msv in msvs]
-        activation_value = self._activation_function(self._mean_msv(all_msvs))
-        return activation_value >= additional_config.get(
-            "activation_threshold", self.activation_threshold
-        )
+        activation_value = self._get_activation_value(msv_by_role)
+        return activation_value >= self._get_activation_threshold(additional_config)
 
     def _get_activation_result(
         self,
@@ -357,6 +398,108 @@ class BaselineMetacognitiveActivationComputation(MetacognitiveActivationComputat
 
     def _activation_function(self, value: int) -> float:
         return 1 / (1 + math.exp(-value * 0.00001))
+
+    def _get_routing_result(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+        additional_config: dict = {},
+    ) -> RoutingResult:
+        return RoutingResult(
+            activation_threshold=self._get_activation_threshold(additional_config),
+            activation_value=self._get_activation_value(msv_by_role),
+            engage_system_two=self._should_engage_system_two(
+                msv_by_role, additional_config
+            ),
+            small_dimension_activation_components={},
+        )
+
+
+class SmallDimensionsMetacognitiveActivationComputation(
+    MetacognitiveActivationComputation
+):
+    compute_method = "baseline"  # TODO for this branch!
+    activation_threshold: int = 15
+
+    routing_weights: dict[str, float] = {
+        MetacognitiveComponentNames.Uncertainty: 0.30,
+        MetacognitiveComponentNames.Conflicting_Information: 0.25,
+        MetacognitiveComponentNames.Problem_Importance: 0.25,
+        MetacognitiveComponentNames.Unfamiliarity: 0.20,
+    }
+
+    def _get_activation_threshold(self, additional_config: dict = {}) -> int:
+        activation_threshold = additional_config.get(
+            "activation_threshold", self.activation_threshold
+        )
+        return activation_threshold
+
+    def _get_activation_value(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+    ) -> int:
+        # Flatten msv by role to just a list of MSV
+        all_msvs = [msv for msvs in msv_by_role.values() for msv in msvs]
+        mean_msv = MetacognitiveVector.msv_mean(all_msvs)
+        activation_values = self._get_components(mean_msv)
+        activation_value = sum(activation_values.values())
+        return activation_value
+
+    def _should_engage_system_two(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+        additional_config: dict = {},
+    ) -> bool:
+        activation_value = self._get_activation_value(msv_by_role)
+        return activation_value >= self._get_activation_threshold(additional_config)
+
+    def _get_activation_result(
+        self,
+        metacognitive_vector: MetacognitiveVector,
+        additional_config: dict = {},
+    ) -> str:
+        activation_values = self._get_components(metacognitive_vector)
+        return ", ".join(
+            [f"{name}={value}" for name, value in activation_values.items()]
+        )
+
+    def _get_components(self, msv: MetacognitiveVector) -> dict[str, int]:
+        components = {
+            "uncertainty (1-CE)": int(
+                self.routing_weights[MetacognitiveComponentNames.Uncertainty]
+                * msv.uncertainty
+            ),
+            "conflicting information (CI)": int(
+                self.routing_weights[
+                    MetacognitiveComponentNames.Conflicting_Information
+                ]
+                * msv.conflicting_information.calculated_value
+            ),
+            "problem importance (PI)": int(
+                self.routing_weights[MetacognitiveComponentNames.Problem_Importance]
+                * msv.problem_importance.calculated_value
+            ),
+            "novelty (1-EM)": int(
+                self.routing_weights[MetacognitiveComponentNames.Unfamiliarity]
+                * msv.unfamiliarity
+            ),
+        }
+        return components
+
+    def _get_routing_result(
+        self,
+        msv_by_role: dict[NodeRole, list[MetacognitiveVector]],
+        additional_config: dict = {},
+    ) -> RoutingResult:
+        all_msvs = [msv for msvs in msv_by_role.values() for msv in msvs]
+        mean_msv = MetacognitiveVector.msv_mean(all_msvs)
+        return RoutingResult(
+            activation_threshold=self._get_activation_threshold(additional_config),
+            activation_value=self._get_activation_value(msv_by_role),
+            engage_system_two=self._should_engage_system_two(
+                msv_by_role, additional_config
+            ),
+            small_dimension_activation_components=self._get_components(mean_msv),
+        )
 
 
 def generate_empty_msv() -> MetacognitiveVector:

@@ -3,7 +3,6 @@ import math
 import traceback
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
@@ -19,7 +18,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import system_nodes
-from app_graph import create_system_two_node_graph
 from common import MetacognitiveComponentNames
 from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
@@ -30,6 +28,7 @@ from metacognitive import (
     generate_empty_msv,
 )
 from orchestrator import MetacognitiveVectorResponse, Orchestrator, SystemResponse
+from role_visualization import create_role_pipeline_components
 
 
 @asynccontextmanager
@@ -78,6 +77,8 @@ async def get_chart(request: Request, id: str | None = None):
     msv_graphs = []
     msv_bar_graphs = []
     system_two_graph_components = ("", "")
+    viz_components = {}
+    result = None
 
     if id:
         for system_number, msv in enumerate(msv_state.get(id, [])):
@@ -187,18 +188,23 @@ async def get_chart(request: Request, id: str | None = None):
             )
             msv_graphs.append(parts)
             msv_bar_graphs.append(bar_parts)
-            if system_number == 1:
-                global selected_nodes
-                plot, selected_nodes = create_system_two_node_graph(system_state[id])
-                system_two_graph_components = components(plot)
+
+        result = system_state[id]
+        viz_components = create_role_pipeline_components(
+            role_responses=result.node_responses or [],
+            assignment_result=result.assignment,
+            routing_result=result.routing,
+            generalist_annotation=None,  # result.generalist_annotation,
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="msv_visualizer.html",
         context={
+            "viz": viz_components,
             "msv_graphs": msv_graphs,
             "msv_json": msv_response,
             "msv_bar_graphs": msv_bar_graphs,
-            "system_two_graph": system_two_graph_components,
         },
     )
 
@@ -207,12 +213,19 @@ async def get_chart(request: Request, id: str | None = None):
 async def node_detail(node_id: int):
     """HTMX endpoint for node details"""
     info = selected_nodes[node_id]
+    msv = info.node_msv
 
     return f"""
     <div class="node-detail">
         <p><strong>Role:</strong> {info.node_role.replace("_", " ").title()}</p>
+        <p><strong>MSV:</strong>
+            ER={msv.emotional_response.calculated_value},
+            CE={msv.correctness_evaluation.calculated_value},
+            EM={msv.experiential_matching.calculated_value},
+            CI={msv.conflicting_information.calculated_value},
+            PI={msv.problem_importance.calculated_value}
+        </p>
         <p><strong>Response:</strong> {info.node_response}</p>
-        <p><em>Node ID: {node_id}</em></p>
     </div>
     """
 
