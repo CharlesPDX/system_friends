@@ -194,7 +194,6 @@ async def get_chart(request: Request, id: str | None = None):
             role_responses=result.node_responses or [],
             assignment_result=result.assignment,
             routing_result=result.routing,
-            generalist_annotation=None,  # result.generalist_annotation,
         )
 
     return templates.TemplateResponse(

@@ -196,7 +196,7 @@ class Orchestrator:
             with open("nodes.json") as nodes_config_file:
                 nodes_config = NodesConfig.model_validate_json(nodes_config_file.read())
 
-        pipeline_length = len(self._dialectic_pipeline)
+        pipeline_length = len(self.role_weights)
 
         if nodes_config and nodes_config.nodes:
             self._nodes = [
@@ -222,17 +222,17 @@ class Orchestrator:
                 config_node_index %= config_nodes_index_limit
 
         else:
-            self._nodes = [Node() for _ in enumerate(self._dialectic_pipeline)]
+            self._nodes = [Node() for _ in enumerate(self.role_weights.keys())]
 
         self.assigned_roles: defaultdict[NodeRole, list[Node]] = defaultdict(list)
         number_of_available_nodes = len(self._nodes)
-        for role_index, role in enumerate(self._dialectic_pipeline):
+        for role_index, role in enumerate(self.role_weights.keys()):
             self.assigned_roles[role].append(
                 self._nodes[role_index % number_of_available_nodes]
             )
 
     def _reset_assigned_roles(self) -> None:
-        for role in self._dialectic_pipeline:
+        for role in self.assigned_roles.keys():
             self.assigned_roles[role].clear()
 
     def _transition_nodes(
@@ -247,11 +247,11 @@ class Orchestrator:
             for msv in msvs
         ]
         n_agents = len(fitness_scores)
-        m_roles = len(self._dialectic_pipeline)
+        m_roles = len(self.assigned_roles)
 
         cost_matrix = np.zeros((n_agents, m_roles))
         for i, scores in enumerate(fitness_scores):
-            for j, role in enumerate(self._dialectic_pipeline):
+            for j, role in enumerate(self.assigned_roles.keys()):
                 cost_matrix[i, j] = scores[role]
 
         # Handle rectangular matrices (more agents than roles or vice versa)
@@ -263,18 +263,16 @@ class Orchestrator:
 
         assignment: dict[str, int] = {}
         total_fitness = 0.0
+        all_roles = list(self.assigned_roles.keys())
         for row, col in zip(row_indices, col_indices):
             if col < m_roles:  # safety check
-                role = self._dialectic_pipeline[col]
+                role = all_roles[col]
                 assignment[role.value] = row
                 total_fitness += fitness_scores[row][role]
                 self.assigned_roles[role].append(self._nodes[row])
         return AssignmentResult(
             heterogeneous_matrix=np.array(
-                [
-                    [fs[role] for role in self._dialectic_pipeline]
-                    for fs in fitness_scores
-                ]
+                [[fs[role] for role in all_roles] for fs in fitness_scores]
             ),
             heterogeneous_scores=fitness_scores,
             assignment=assignment,
@@ -349,6 +347,7 @@ class Orchestrator:
         system_two_msv = None
         node_responses = None
         assignment = None
+        generalist_annotation = None
         system_one_response = await self._nodes[0].summarize_responses(
             list([value[0] for value in system_one_responses.values()])
         )
@@ -364,12 +363,16 @@ class Orchestrator:
             self.system_configuration.additional_configuration,
         )
         if engage_system_two:
-            node_responses, overall_system_two_response, system_two_msv, assignment = (
-                await self._get_system_two_response(
-                    user_prompt=user_prompt,
-                    system_one_response=system_one_response,
-                    msv_by_role=msv_by_role,
-                )
+            (
+                node_responses,
+                overall_system_two_response,
+                system_two_msv,
+                assignment,
+                generalist_annotation,
+            ) = await self._get_system_two_response(
+                user_prompt=user_prompt,
+                system_one_response=system_one_response,
+                msv_by_role=msv_by_role,
             )
 
         system_response = SystemResponse(
@@ -392,7 +395,7 @@ class Orchestrator:
                 msv_by_role,
                 self.system_configuration.additional_configuration,
             ),
-            generalist_annotation=None,
+            generalist_annotation=generalist_annotation,
             assignment=assignment,
         )
 
@@ -429,6 +432,8 @@ class Orchestrator:
         previous_state: list[MetacognitiveVector] | None = None
 
         for role, nodes in self.assigned_roles.items():
+            if role == NodeRole.Generalist:
+                continue
 
             stage_node_responses = await asyncio.gather(
                 *[
@@ -480,20 +485,59 @@ class Orchestrator:
             messages.append({"role": "assistant", "content": previous_response})
 
             # basic early stopping implementation
-            mean_state = MetacognitiveVector.msv_mean(
-                list([msv for msv in previous_state])
-            )
+            # mean_state = MetacognitiveVector.msv_mean(
+            #     list([msv for msv in previous_state])
+            # )
             # if (
             #     mean_state.correctness_evaluation.calculated_value >= 85
             #     or mean_state.conflicting_information.calculated_value <= 20
             # ):
             #     break
 
-        overall_system_two_response = previous_response
-        state = (
+        last_mean_msv = (
             MetacognitiveVector.msv_mean(list([msv for msv in previous_state]))
             if previous_state
             else None
         )
+        generalist_annotation = None
+        if last_mean_msv is not None and (
+            last_mean_msv.conflicting_information.calculated_value > 65
+            or last_mean_msv.emotional_response.calculated_value < 35
+            or last_mean_msv.problem_importance.calculated_value > 70
+        ):
+            generalist_annotation, generalist_node = await self.assigned_roles[
+                NodeRole.Generalist
+            ][0].get_response(
+                user_prompt,
+                previous_response,
+                previous_role,
+                self.system_configuration.prompts,
+                NodeRole.Generalist,
+            )
+            generalist_msv, _ = (
+                await MetacognitiveVectorComputation.compute_metacognitive_state_vector(
+                    self.system_configuration,
+                    generalist_node,
+                    generalist_annotation,
+                    previous_response,
+                )
+            )
 
-        return (node_responses, overall_system_two_response, state, assignment)
+            node_responses.append(
+                NodeResponse(
+                    node_role=NodeRole.Generalist,
+                    node_response=generalist_annotation,
+                    node_msv=generalist_msv,
+                )
+            )
+
+        overall_system_two_response = previous_response
+        state = last_mean_msv
+
+        return (
+            node_responses,
+            overall_system_two_response,
+            state,
+            assignment,
+            generalist_annotation,
+        )

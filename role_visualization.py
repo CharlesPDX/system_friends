@@ -66,7 +66,6 @@ ROLE_SHORT_LABELS = {
 def create_role_pipeline_graph(
     role_responses: list[NodeResponse],
     assignment: dict[str, int] | None = None,
-    generalist_annotation: str | None = None,
 ) -> tuple[figure, list[NodeResponse]]:
     """
     Create the Bokeh pipeline graph for the five-role architecture.
@@ -94,6 +93,9 @@ def create_role_pipeline_graph(
         NodeRole.Synthesizer,
     ]
     chain_responses = [r for r in role_responses if r.node_role in chain_roles]
+    generalist_response = next(
+        (r for r in role_responses if r.node_role == NodeRole.Generalist), None
+    )
 
     # Sort chain_responses by dialectical order
     role_order = {role: i for i, role in enumerate(chain_roles)}
@@ -101,6 +103,8 @@ def create_role_pipeline_graph(
 
     # Build node list: chain nodes + optional Generalist
     all_nodes = list(chain_responses)
+    if generalist_response:
+        all_nodes.append(generalist_response)
 
     # Create the plot — wider than existing to fit 5 nodes
     n_chain = len(chain_responses)
@@ -118,15 +122,19 @@ def create_role_pipeline_graph(
     node_to_index = {node: i for i, node in enumerate(all_nodes)}
 
     x_spacing = 1.0
+    circle_radius = 0.25
     graph_layout = {}
     for i, node in enumerate(all_nodes):
         idx = node_to_index[node]
-        if i < n_chain:
+        if node.node_role in chain_roles:
             # Chain nodes: horizontal line at y=0
-            graph_layout[idx] = (i * x_spacing, 0)
+            chain_idx = chain_responses.index(node)
+            graph_layout[idx] = (chain_idx * x_spacing, 0)
         else:
-            # Generalist: above the Evaluator (index 2) position
-            graph_layout[idx] = (2 * x_spacing, 1.5)
+            # Generalist: above and after the Synthesizer (last chain node)
+            # Offset by half the diameter (which is the full radius)
+            synthesizer_x = (n_chain - 1) * x_spacing
+            graph_layout[idx] = (synthesizer_x + circle_radius, 1.5)
 
     graph.layout_provider = StaticLayoutProvider(graph_layout=graph_layout)
 
@@ -175,7 +183,6 @@ def create_role_pipeline_graph(
     )
 
     # --- Node styling (color-coded by role) ---
-    circle_radius = 0.25
     graph.node_renderer.glyph = Circle(
         radius=circle_radius, fill_color="color", line_color="navy", line_width=2
     )
@@ -187,6 +194,8 @@ def create_role_pipeline_graph(
     )
 
     # --- Edges: chain is sequential ---
+    # We'll only use edges for the graph structure, but hide them visually
+    # because we're drawing arrows instead
     chain_edges = list(pairwise(chain_responses))
     edge_start = []
     edge_end = []
@@ -194,32 +203,52 @@ def create_role_pipeline_graph(
         edge_start.append(node_to_index[e[0]])
         edge_end.append(node_to_index[e[1]])
 
+    # Add edge from Synthesizer to Generalist if Generalist exists
+    if generalist_response:
+        synthesizer = chain_responses[-1]  # Last node in chain is Synthesizer
+        edge_start.append(node_to_index[synthesizer])
+        edge_end.append(node_to_index[generalist_response])
+
     graph.edge_renderer.data_source.data = dict(start=edge_start, end=edge_end)
-    graph.edge_renderer.glyph = MultiLine(
-        line_color="gray", line_alpha=0.8, line_width=2
-    )
+    # Make edges invisible since we're using arrows
+    graph.edge_renderer.glyph = MultiLine(line_color="gray", line_alpha=0, line_width=0)
 
     # --- Arrows along edges ---
-    for edge in chain_edges:
+    all_edges = list(chain_edges)
+    if generalist_response:
+        synthesizer = chain_responses[-1]
+        all_edges.append((synthesizer, generalist_response))
+
+    for edge in all_edges:
         start_idx = node_to_index[edge[0]]
         end_idx = node_to_index[edge[1]]
         start_pos = graph_layout[start_idx]
         end_pos = graph_layout[end_idx]
 
+        # Calculate direction vector
         dx = end_pos[0] - start_pos[0]
         dy = end_pos[1] - start_pos[1]
         distance = (dx**2 + dy**2) ** 0.5
 
         if distance > 0:
+            # Normalize direction
             dx_norm = dx / distance
             dy_norm = dy / distance
 
+            # Start arrow at the edge of the first circle (moving outward from center)
+            arrow_start_x = start_pos[0] + dx_norm * circle_radius
+            arrow_start_y = start_pos[1] + dy_norm * circle_radius
+
+            # End arrow at the edge of the second circle (moving inward toward center)
+            arrow_end_x = end_pos[0] - dx_norm * circle_radius
+            arrow_end_y = end_pos[1] - dy_norm * circle_radius
+
             arrow = Arrow(
                 end=VeeHead(size=15, fill_color="gray"),
-                x_start=start_pos[0] + dx_norm * circle_radius,
-                y_start=start_pos[1] + dy_norm * circle_radius,
-                x_end=end_pos[0] - dx_norm * circle_radius,
-                y_end=end_pos[1] - dy_norm * circle_radius,
+                x_start=arrow_start_x,
+                y_start=arrow_start_y,
+                x_end=arrow_end_x,
+                y_end=arrow_end_y,
                 line_color="gray",
                 line_width=2,
             )
@@ -634,7 +663,6 @@ def create_role_pipeline_components(
     role_responses: list[NodeResponse],
     assignment_result: AssignmentResult | None = None,
     routing_result: RoutingResult | None = None,
-    generalist_annotation: str | None = None,
 ) -> tuple[dict[str, tuple], list[NodeResponse]]:
     """
     Create all visualizations and return as Bokeh component dict.
@@ -647,12 +675,13 @@ def create_role_pipeline_components(
         # Then pass to template context
     """
     result = {}
+    nodes = []
 
     # 1. Pipeline graph
     if role_responses:
         assignment_map = assignment_result.assignment if assignment_result else None
         pipeline_plot, nodes = create_role_pipeline_graph(
-            role_responses, assignment_map, generalist_annotation
+            role_responses, assignment_map
         )
         result["pipeline_graph"] = components(pipeline_plot)
 
