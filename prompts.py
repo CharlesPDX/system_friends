@@ -5,9 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PromptNames(StrEnum):
-    Correctness = "correctness_prompt"
+    Correctness_Evaluation = "correctness_evaluation_prompt"
     Experiential_Matching = "experiential_matching_prompt"
-    Conflict_Information = "conflict_information_prompt"
+    Conflicting_Information = "conflicting_information_prompt"
     Problem_Importance = "problem_importance_prompt"
     System_Two_System = "system_two_system_prompt"
     System_Two_User = "system_two_user_prompt"
@@ -24,24 +24,24 @@ class PromptNames(StrEnum):
 
 
 class Prompts(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True) 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    correctness_prompt: str = """Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? 
+    correctness_evaluation_prompt: str = """Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? 
 Consider the contextual appropriateness with the given context. 
 Assess each dimension from 0 to 100 and return the response in JSON format {"logical_consistency": "logical consistency", "factual_accuracy": "factual accuracy", "contextual_appropriateness": "contextual appropriateness"}, 
 do not include any additional text.
 Context: {{original_prompt}}
 Claim: {{message}}"""
 
-    experiential_matching_prompt: str = """You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.
+    experiential_matching_prompt: str = """You are going to measure the matching level of this claim with the given knowledge base, your historical responses, and how familiar you are with the the claim respectively.
 Consider the given knowledge as the knowledge base, the given history as the historical responses.
 Measure the matching level from 0 to 100, which is the lowest to the highest.
-Return the response in JSON format {"knowledge_base_matching": "knowledge base matching", "historical_responses_matching": "historical responses matching"}; do not include any additional text.
+Return the response in JSON format {"knowledge_base_matching": "knowledge base matching", "historical_responses_matching": "historical responses matching", "cue_familiarity": "cue familiarity}; do not include any additional text.
 Knowldege: {{knowledge_base}}
 History: {{historical_responses}}
 Claim: {{message}}"""
 
-    conflict_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: 
+    conflicting_information_prompt: str = """You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions on a scale of 0 to 100: 
 a) internal consistency, which measures logical contradictions within the given information
 b) disagreement across multiple sources, which compares the given information from multiple sources
 c) consistency of information over time, which compares the given information from Temporal Information
@@ -56,20 +56,42 @@ Assess each dimension from 0 to 100 and return the response in JSON format {"pot
 do not include any additional text.
 User Prompt: {{original_prompt}}"""
 
-    system_two_system_prompt: str = "You are a System Two, logical analytical deep thinking system"
+    system_two_system_prompt: str = (
+        "You are a System Two, logical analytical deep thinking system"
+    )
 
-    system_two_user_prompt: str = """Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?"""
+    system_two_user_prompt: str = (
+        """Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?"""
+    )
 
-    domain_expert_system: str = """You are a domain expert, based on prior information from {{previous_node_role}}, provide a more insightful response."""
-    domain_expert_user: str = """Based on the conversation thus far, what is your take?"""
-    critic_system: str = """You are a critical analyst, challenge assumptions, think logically, previous information is from a {{previous_node_role}}"""
-    critic_user: str = """Based on the conversation thus far, what is your assessment?"""
-    evaluator_system: str = """You are an evaluator, taking a broader perspective to analyze prior information from {{previous_node_role}} and render an opinion"""
-    evaluator_user: str = """Based on the conversation thus far, what is your assessment?"""
-    generalist_system: str = """You are a generalist, with a wide base of knowledege, previous information is from {{previous_node_role}}"""
+    domain_expert_system: str = (
+        """You are a domain expert, based on prior information from {{previous_node_role}}, provide a more insightful response."""
+    )
+    domain_expert_user: str = (
+        """Based on the conversation thus far, what is your take?"""
+    )
+    critic_system: str = (
+        """You are a critical analyst, challenge assumptions, think logically, previous information is from a {{previous_node_role}}"""
+    )
+    critic_user: str = (
+        """Based on the conversation thus far, what is your assessment?"""
+    )
+    evaluator_system: str = (
+        """You are an evaluator, taking a broader perspective to analyze prior information from {{previous_node_role}} and render an opinion"""
+    )
+    evaluator_user: str = (
+        """Based on the conversation thus far, what is your assessment?"""
+    )
+    generalist_system: str = (
+        """You are a generalist, with a wide base of knowledege, previous information is from {{previous_node_role}}"""
+    )
     generalist_user: str = """Based on the conversation thus far, what is your take?"""
-    synthesizer_system: str = """You are a synthesizer, you take information from disperate sources and combine it into a concise cogent response, previous information is from {{previous_node_role}}"""
-    synthesizer_user: str = """Based on all conversation thus far, what is your synthesis?"""
+    synthesizer_system: str = (
+        """You are a synthesizer, you take information from disperate sources and combine it into a concise cogent response, previous information is from {{previous_node_role}}"""
+    )
+    synthesizer_user: str = (
+        """Based on all conversation thus far, what is your synthesis?"""
+    )
 
     jinja_env: Environment = Field(default_factory=Environment, exclude=True)
 

@@ -1,7 +1,7 @@
-import argparse
 import json
 import math
-from collections import defaultdict, deque
+import traceback
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import httpx
 from bokeh.embed import components
 from bokeh.models import ColumnDataSource
 from bokeh.plotting import figure
@@ -19,29 +18,23 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-import system_one_model
-import system_two_model
+import system_nodes
 from app_graph import create_system_two_node_graph
+from common import MetacognitiveComponentNames
+from config import SystemConfiguration
 from experiment_model import SystemOnePrompt, SystemOneResponse
 from history import create_database_and_table, record_interaction
 from metacognitive import (
+    MetacognitiveActivationComputation,
     MetacognitiveVector,
-    compute_metacognitive_state_vector,
     generate_empty_msv,
 )
-from prompts import Prompts
-from system_communication_objects import SystemTwoRequest
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--system-two", default=False, action="store_true")
-parser.add_argument("--system-two-url", required=False)
-app_args = parser.parse_args()
+from orchestrator import MetacognitiveVectorResponse, Orchestrator, SystemResponse
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not app_args.system_two:
-        await reset_system()
+    await reset_system()
 
     yield
     # cleanup/shutdown goes here, if necessary
@@ -55,7 +48,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.post("/chat", response_class=HTMLResponse)
 async def chat(request: Request, user_input: str = Form(...)):
-    response, id = await run_system_one(user_input)
+    response, id = await _run_system(user_input)
     return f"""
 <div class="message is-bot" 
      hx-get="/get_chart?id={id}" 
@@ -66,21 +59,21 @@ async def chat(request: Request, user_input: str = Form(...)):
 
 
 msv_state: defaultdict[str, list[MetacognitiveVector]] = defaultdict(list)
-system_two_state: dict[str, system_two_model.SystemTwoResponse] = {}
-selected_nodes: list[system_two_model.NodeResponse] = []
+system_state: dict[str, SystemResponse] = {}
+selected_nodes: list[system_nodes.NodeResponse] = []
 
 
 class ChartNames(StrEnum):
     overall_msv = "Overall MSV"
     emotional_response = "Emotional Response"
-    correctness = "Correctness"
+    correctness_evaluation = "Correctness Evaluation"
     experiential_matching = "Experiential Matching"
-    conflict_information = "Conflict Information"
+    conflicting_information = "Conflicting Information"
     problem_importance = "Problem Importance"
 
 
 @app.get("/get_chart", response_class=HTMLResponse)
-async def get_chart(request: Request, id: str = None):
+async def get_chart(request: Request, id: str | None = None):
     msv_response = []
     msv_graphs = []
     msv_bar_graphs = []
@@ -91,10 +84,12 @@ async def get_chart(request: Request, id: str = None):
             system_label = f"System {system_number+1}"
             msv_response.append(
                 json.dumps(
-                    asdict(msv)
+                    msv.model_dump()
                     | {
-                        "activation_result": msv._activation_function(
-                            msv.calculated_value
+                        "activation_result": MetacognitiveActivationComputation.get_activation_result(
+                            system_configuration.activation_computation_key,
+                            msv,
+                            system_configuration.additional_configuration,
                         )
                     },
                     indent=2,
@@ -102,16 +97,16 @@ async def get_chart(request: Request, id: str = None):
             )
 
             data = {
-                "emotional_response": msv.emotional_response.calculated_value,
-                "correctness": msv.correctness.calculated_value,
-                "experiential_matching": msv.experiential_matching.calculated_value,
-                "conflict_information": msv.conflict_information.calculated_value,
-                "problem_importance": msv.problem_importance.calculated_value,
+                MetacognitiveComponentNames.Emotional_Response.value: msv.emotional_response.calculated_value,
+                MetacognitiveComponentNames.Correctness_Evaluation.value: msv.correctness_evaluation.calculated_value,
+                MetacognitiveComponentNames.Experiential_Matching.value: msv.experiential_matching.calculated_value,
+                MetacognitiveComponentNames.Conflicting_Information.value: msv.conflicting_information.calculated_value,
+                MetacognitiveComponentNames.Problem_Importance.value: msv.problem_importance.calculated_value,
             }
             emotional_data = _clean_values(msv.emotional_response)
-            correctness_data = _clean_values(msv.correctness)
+            correctness_evaluation_data = _clean_values(msv.correctness_evaluation)
             experiential_matching_data = _clean_values(msv.experiential_matching)
-            conflict_information_data = _clean_values(msv.conflict_information)
+            conflicting_information_data = _clean_values(msv.conflicting_information)
             problem_importance_data = _clean_values(msv.problem_importance)
 
             # Create a Bokeh plot
@@ -122,7 +117,7 @@ async def get_chart(request: Request, id: str = None):
                 emotional_data, "Emotion Components", f"{system_label} Emotion Vector"
             )
             correctness_chart = _generate_chart(
-                correctness_data,
+                correctness_evaluation_data,
                 "Correctness Components",
                 f"{system_label} Correctness Vector",
             )
@@ -132,9 +127,9 @@ async def get_chart(request: Request, id: str = None):
                 f"{system_label} Experiential Vector",
             )
             conflict_chart = _generate_chart(
-                conflict_information_data,
-                "Conflict Components",
-                f"{system_label} Conflict Vector",
+                conflicting_information_data,
+                "Conflicting Components",
+                f"{system_label} Conflicting Vector",
             )
             problem_importance_chart = _generate_chart(
                 problem_importance_data,
@@ -149,7 +144,7 @@ async def get_chart(request: Request, id: str = None):
                 emotional_data, "Emotion Components", f"{system_label} Emotion Vector"
             )
             bar_correctness_chart = _generate_bar_chart(
-                correctness_data,
+                correctness_evaluation_data,
                 "Correctness Components",
                 f"{system_label} Correctness Vector",
             )
@@ -159,9 +154,9 @@ async def get_chart(request: Request, id: str = None):
                 f"{system_label} Experiential Vector",
             )
             bar_conflict_chart = _generate_bar_chart(
-                conflict_information_data,
-                "Conflict Components",
-                f"{system_label} Conflict Vector",
+                conflicting_information_data,
+                "Conflicting Components",
+                f"{system_label} Conflicting Vector",
             )
             bar_problem_importance_chart = _generate_bar_chart(
                 problem_importance_data,
@@ -174,9 +169,9 @@ async def get_chart(request: Request, id: str = None):
                 {
                     ChartNames.overall_msv.value: msv_components_chart,
                     ChartNames.emotional_response.value: emotion_chart,
-                    ChartNames.correctness.value: correctness_chart,
+                    ChartNames.correctness_evaluation.value: correctness_chart,
                     ChartNames.experiential_matching.value: experiential_chart,
-                    ChartNames.conflict_information.value: conflict_chart,
+                    ChartNames.conflicting_information.value: conflict_chart,
                     ChartNames.problem_importance.value: problem_importance_chart,
                 }
             )
@@ -184,9 +179,9 @@ async def get_chart(request: Request, id: str = None):
                 {
                     ChartNames.overall_msv.value: bar_msv_components_chart,
                     ChartNames.emotional_response.value: bar_emotion_chart,
-                    ChartNames.correctness.value: bar_correctness_chart,
+                    ChartNames.correctness_evaluation.value: bar_correctness_chart,
                     ChartNames.experiential_matching.value: bar_experiential_chart,
-                    ChartNames.conflict_information.value: bar_conflict_chart,
+                    ChartNames.conflicting_information.value: bar_conflict_chart,
                     ChartNames.problem_importance.value: bar_problem_importance_chart,
                 }
             )
@@ -194,9 +189,7 @@ async def get_chart(request: Request, id: str = None):
             msv_bar_graphs.append(bar_parts)
             if system_number == 1:
                 global selected_nodes
-                plot, selected_nodes = create_system_two_node_graph(
-                    system_two_state[id]
-                )
+                plot, selected_nodes = create_system_two_node_graph(system_state[id])
                 system_two_graph_components = components(plot)
     return templates.TemplateResponse(
         request=request,
@@ -227,35 +220,15 @@ async def node_detail(node_id: int):
 excluded_keys = {"calculated_value", "version"}
 
 
-def _clean_values(value) -> dict[str, float]:
+def _clean_values(value) -> dict[str, int]:
     return {
         k: v
-        for k, v in asdict(value).items()
+        for k, v in value.model_dump().items()
         if k not in excluded_keys and not k.startswith("weight_")
     }
 
 
-def get_weights(msv: MetacognitiveVector) -> dict[str, float]:
-    weights = {}
-    for x in (
-        ("msv_weights", msv),
-        ("emotional_response", msv.emotional_response),
-        ("correctness", msv.correctness),
-        ("experiential_matching", msv.experiential_matching),
-        ("conflict_information", msv.conflict_information),
-        ("problem_importance", msv.problem_importance),
-    ):
-        weights[x[0]] = {
-            k: v
-            for k, v in asdict(x[1]).items()
-            if k.startswith("weight") or k == "activation_threshold"
-        }
-    return weights
-
-
-def _generate_bar_chart(
-    data: dict[str, float], x_label: str, chart_title: str
-) -> figure:
+def _generate_bar_chart(data: dict[str, int], x_label: str, chart_title: str) -> figure:
     categories: list[str] = [
         k.replace("_", " ")
         .title()
@@ -282,7 +255,7 @@ def _generate_bar_chart(
     return p
 
 
-def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> figure:
+def _generate_chart(data: dict[str, int], x_label: str, chart_title: str) -> figure:
     categories: list[str] = [
         k.replace("_", " ")
         .title()
@@ -376,144 +349,105 @@ def _generate_chart(data: dict[str, float], x_label: str, chart_title: str) -> f
     return p
 
 
-@app.post("/system1")
-async def run_experiment(
+@app.post("/run_system")
+async def run_system(
     request: Request, system_one_prompt: SystemOnePrompt
 ) -> SystemOneResponse:
-    response = await run_system_one(system_one_prompt.user_input)
-    return SystemOneResponse(response=response, session_id=session_id)
+    response, response_id = await _run_system(system_one_prompt.user_input)
+    return SystemOneResponse(response=response, response_id=response_id)
 
 
-def save_msv_state(msv_system_one, msv_system_two: MetacognitiveVector) -> str:
+def _save_msv_state(msv_response: MetacognitiveVectorResponse) -> str:
     id = str(uuid4())
-    msv_state[id].append(msv_system_one)
-    if msv_system_two:
-        msv_state[id].append(msv_system_two)
+    msv_state[id].append(msv_response.system_one_metacognitive_vector)
+    if msv_response.system_two_metacognitive_vector:
+        msv_state[id].append(msv_response.system_two_metacognitive_vector)
     return id
 
 
-prompts = Prompts()
-history = deque(maxlen=10)
-
-
-async def run_system_one(user_input: str) -> tuple[str, str]:
+async def _run_system(user_input: str) -> tuple[str, str]:
     try:
-        global prompts
-        global weights
-
-        # Generate a response from the system one model and compute the metacognative state vector
-        response = await system_one_model.get_response(user_input, list(history))
-        historical_info = "\n".join(
-            [
-                message["content"]
-                for message in history
-                if message["role"] == "assistant"
-            ]
+        system_response = await orchestrator.get_metacognitive_informed_response(
+            user_input
         )
-        state = await compute_metacognitive_state_vector(
-            prompts=prompts,
-            weights=weights,
-            response=response,
-            original_prompt=user_input,
-            knowledge_base=historical_info,
-            historical_responses=historical_info,
-        )
-
-        parsed_response = system_two_model.SystemTwoResponse(
-            system_two_response=None, metacognitive_vector=None, node_responses=None
-        )
-        if state.should_engage_system_two():
-            system_two_response = httpx.post(
-                f"{app_args.system_two_url}/system2",
-                content=SystemTwoRequest(
-                    user_prompt=user_input,
-                    system_one_response=response,
-                    metacognitive_vector=state,
-                    prompts=prompts,
-                    weights=weights,
-                ).model_dump_json(),
-                timeout=None,
-            )
-            parsed_response = system_two_model.SystemTwoResponse.model_validate_json(
-                system_two_response.text
-            )
-
         if session_id:
             record_interaction(
                 db_file=f"data/{session_id}.sqlite3",
                 user_prompt=user_input,
-                system_one_response=response,
-                system_one_msv=state,
-                system_two_response=parsed_response.system_two_response,
-                system_two_msv=parsed_response.metacognitive_vector,
+                system_one_response=system_response.system_one_response,
+                system_one_msv=system_response.metacognitive_vector.system_one_metacognitive_vector,
+                system_two_response=system_response.system_two_response,
+                system_two_msv=system_response.metacognitive_vector.system_two_metacognitive_vector,
             )
-        id = save_msv_state(state, parsed_response.metacognitive_vector)
-        system_two_state[id] = parsed_response
-        history.append({"role": "user", "content": user_input})
-        system_response = (
-            (
-                parsed_response.system_two_response
-                if parsed_response.system_two_response
-                else response
-            ),
-            id,
-        )
-        history.append({"role": "assistant", "content": system_response[0]})
 
-        return system_response
+        id = _save_msv_state(system_response.metacognitive_vector)
+        system_state[id] = system_response
+
+        return system_response.final_response, id
     except Exception as e:
+        print(traceback.format_exc())
         print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/system2")
-async def run_system_two(
-    system_two_request: SystemTwoRequest,
-) -> system_two_model.SystemTwoResponse:
-    # This requires running a second instance with the `--system-two`` flag:
-    return await system_two_model.get_response(system_two_request)
-
-
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    weights_and_prompts = weights | {"prompts": prompts.model_dump()}
     return templates.TemplateResponse(
-        "index.html", {"request": request, "weights_and_prompts": weights_and_prompts}
+        "index.html",
+        {"request": request, "weights_and_prompts": system_configuration.model_dump()},
     )
 
 
+def _get_default_weights() -> dict[str, dict[str, float]]:
+    msv = generate_empty_msv()
+    weights = {}
+    for x in (
+        ("msv_weights", msv),
+        ("emotional_response", msv.emotional_response),
+        ("correctness_evaluation", msv.correctness_evaluation),
+        ("experiential_matching", msv.experiential_matching),
+        ("conflicting_information", msv.conflicting_information),
+        ("problem_importance", msv.problem_importance),
+    ):
+        weights[x[0]] = {
+            k: v for k, v in x[1].model_dump().items() if k.startswith("weight")
+        }
+    return weights
+
+
 session_id: str | None = None
-weights: dict[str, dict[str, float]] | None = None
+system_configuration: SystemConfiguration = SystemConfiguration(
+    weights=_get_default_weights()
+)
 
 
 @app.post("/reset", response_class=HTMLResponse)
-async def reset_system(configuration: dict[str, dict[str, Any]] | None = None) -> None:
+async def reset_system(configuration: dict[str, Any] | None = None) -> str:
     utc_now = datetime.now(timezone.utc)
     formatted_datetime = utc_now.strftime("%Y-%m-%d_%H_%M_%S_%f")
     data_directory = Path("data")
     data_directory.mkdir(parents=True, exist_ok=True)
 
-    global prompts
-    global weights
-    if not weights and not configuration:
-        weights = get_weights(generate_empty_msv())
+    global system_configuration
 
     if configuration:
-        prompts = Prompts(**configuration["prompts"])
-        weights = configuration.copy()
-        del weights["prompts"]
-    current_configuration = weights | {"prompts": prompts.model_dump()}
+        system_configuration = SystemConfiguration.model_validate(configuration)
+    else:
+        system_configuration = SystemConfiguration(weights=_get_default_weights())
+
+    orchestrator.set_configuration(system_configuration)
+    orchestrator.reset()
+
     created = create_database_and_table(
-        f"data/{formatted_datetime}.sqlite3", current_configuration
+        f"data/{formatted_datetime}.sqlite3", system_configuration.model_dump()
     )
     msv_state.clear()
-    system_two_state.clear()
-    history.clear()
+    system_state.clear()
 
     if created:
         global session_id
         session_id = formatted_datetime
-    return f"""
+    return f"""<!-- {session_id} -->
 <div class="notification is-success">
     <button class="delete"></button>
     Configuration saved successfully!
@@ -531,5 +465,6 @@ async def reset_system(configuration: dict[str, dict[str, Any]] | None = None) -
 if __name__ == "__main__":
     import uvicorn
 
-    port = "8000" if not app_args.system_two else "8001"
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    orchestrator = Orchestrator(system_configuration=system_configuration)
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

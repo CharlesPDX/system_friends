@@ -1,8 +1,13 @@
 from pydantic import BaseModel, Field
 
+from config import SystemConfiguration
+
+
 class Experiment(BaseModel):
     id: str
     prompts: list[str]
+    configuration: SystemConfiguration | None = Field(default=None)
+
 
 class Experiments(BaseModel):
     experiments: list[Experiment]
@@ -23,6 +28,7 @@ class CompletedExperiments(BaseModel):
 class SystemOnePrompt(BaseModel):
     user_input: str
 
+
 class SystemOneResponse(BaseModel):
     response: str
-    session_id: str
+    response_id: str

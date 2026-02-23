@@ -1,6 +1,83 @@
 {
-	"experiments":[
-		{"id": "abc", "prompts":["What's good?", "Sounds interesting!"]},
-		{"id": "def", "prompts":["What's the weather like?"]}
+	"experiments": [
+		{
+			"id": "abc",
+			"prompts": [
+				"What's good?",
+				"Sounds interesting!"
+			],
+			"configuration": {
+				"prompts": {
+					"correctness_evaluation_prompt": "Without citing modern fact-checks, how would you assess this claim on the dimensions of logical consistency, factual accuracy, and contextual appropriateness? \nConsider the contextual appropriateness with the given context. \nAssess each dimension from 0 to 100 and return the response in JSON format {\"logical_consistency\": \"logical consistency\", \"factual_accuracy\": \"factual accuracy\", \"contextual_appropriateness\": \"contextual appropriateness\"}, \ndo not include any additional text.\nContext: {{original_prompt}}\nClaim: {{message}}",
+					"experiential_matching_prompt": "You are going to measure the matching level of this claim with the given knowledge base and the historical responses respectively.\nConsider the given knowledge as the knowledge base, the given history as the historical responses.\nMeasure the matching level from 0 to 100, which is the lowest to the highest.\nReturn the response in JSON format {\"knowledge_base_matching\": \"knowledge base matching\", \"historical_responses_matching\": \"historical responses matching\"}; do not include any additional text.\nKnowldege: {{knowledge_base}}\nHistory: {{historical_responses}}\nClaim: {{message}}",
+					"conflict_information_prompt": "You are going to measure the degree of inconsistency and contradictory in the information from the following dimensions: \na) internal consistency, which measures logical contradictions within the given information\nb) disagreement across multiple sources, which compares the given information from multiple sources\nc) consistency of information over time, which compares the given information from Temporal Information\nReturn the response in JSON format {\"internal_consistency\": \"internal consistency\", \"source_agreement\": \"source agreement\", \"temporal_stability\": \"temporal stability\"}; do not include any additional text.\nInformation: {{message}}\nSources:{{sources}}\nTemporal Information: {{temporal_info}}\n",
+					"problem_importance_prompt": "How would you assess the User Prompt for problem importance on the dimensions of potential consequences, temporal urgency, and scope of impact? \nAssess each dimension from 0 to 100 and return the response in JSON format {\"potential_consequences\": \"potential consequences\", \"temporal_urgency\": \"temporal urgency\", \"scope_of_impact\": \"scope of impact\"}, \ndo not include any additional text.\nUser Prompt: {{original_prompt}}",
+					"system_two_system_prompt": "You are a System Two, logical analytical deep thinking system",
+					"system_two_user_prompt": "Given the previous System One response, and its interpretation of the user's orginal prompt: '{{user_prompt}}', what would you say instead?",
+					"domain_expert_system": "You are a domain expert, based on prior information from {{previous_node_role}}, provide a more insightful response.",
+					"domain_expert_user": "Based on the conversation thus far, what is your take?",
+					"critic_system": "You are a critical analyst, challenge assumptions, think logically, previous information is from a {{previous_node_role}}",
+					"critic_user": "Based on the conversation thus far, what is your assessment?",
+					"evaluator_system": "You are an evaluator, taking a broader perspective to analyze prior information from {{previous_node_role}} and render an opinion",
+					"evaluator_user": "Based on the conversation thus far, what is your assessment?",
+					"generalist_system": "You are a generalist, with a wide base of knowledege, previous information is from {{previous_node_role}}",
+					"generalist_user": "Based on the conversation thus far, what is your take?",
+					"synthesizer_system": "You are a synthesizer, you take information from disperate sources and combine it into a concise cogent response, previous information is from {{previous_node_role}}",
+					"synthesizer_user": "Based on all conversation thus far, what is your synthesis?"
+				},
+				"weights": {
+					"msv_weights": {
+						"weight_emotional_response": 0.2,
+						"weight_correctness_evaluation": 0.2,
+						"weight_experiential_matching": 0.2,
+						"weight_conflicting_information": 0.2,
+						"weight_problem_importance": 0.2
+					},
+					"emotional_response": {
+						"weight_fear": 0.1,
+						"weight_anger": 0.1,
+						"weight_anticipation": 0.1,
+						"weight_trust": 0.1,
+						"weight_surprise": 0.1,
+						"weight_positive": 0.1,
+						"weight_negative": 0.1,
+						"weight_sadness": 0.1,
+						"weight_disgust": 0.1,
+						"weight_joy": 0.1
+					},
+					"correctness_evaluation": {
+						"weight_logical_consistency": 0.3,
+						"weight_factual_accuracy": 0.4,
+						"weight_contextual_appropriateness": 0.3
+					},
+					"experiential_matching": {
+						"weight_knowledge_base_matching": 0.3,
+						"weight_historical_responses_matching": 0.3,
+						"weight_cue_familiarity": 0.4
+					},
+					"conflicting_information": {
+						"weight_internal_consistency": 0.3,
+						"weight_source_agreement": 0.4,
+						"weight_temporal_stability": 0.3
+					},
+					"problem_importance": {
+						"weight_potential_consequences": 0.4,
+						"weight_temporal_urgency": 0.3,
+						"weight_scope_of_impact": 0.3
+					}
+				},
+				"vector_computation_key": "baseline",
+				"activation_computation_key": "baseline",
+				"additional_configuration": {
+					"activation_threshold": 0.001
+				}
+			}
+		},
+		{
+			"id": "def",
+			"prompts": [
+				"What's the weather like?"
+			]
+		}
 	]
 }

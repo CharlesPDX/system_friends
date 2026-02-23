@@ -5,3 +5,6 @@ uvicorn
 python-multipart
 NRCLex
 bokeh
+networkx
+scipy
+numpy

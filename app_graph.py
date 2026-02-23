@@ -13,18 +13,19 @@ from bokeh.models import (
 )
 from bokeh.plotting import figure
 
-from system_two_model import NodeResponse, NodeRole, SystemTwoResponse
+from orchestrator import SystemResponse
+from system_nodes import NodeResponse, NodeRole
 
 
 def create_system_two_node_graph(
-    system_two_state: SystemTwoResponse,
+    system_two_state: SystemResponse,
 ) -> tuple[figure, list[NodeResponse]]:
     """Create the Bokeh graph"""
     # Create a graph with multiple nodes and edges
     G = nx.Graph()
-    system_two_nodes: list[SystemTwoResponse] = []
+    system_two_nodes: list[NodeResponse] = []
     has_synthesizer_role = False
-    for node_response in system_two_state.node_responses:
+    for node_response in system_two_state.node_responses or []:
         if not has_synthesizer_role and node_response.node_role == NodeRole.Synthesizer:
             has_synthesizer_role = True
         system_two_nodes.append(node_response)
@@ -33,7 +34,7 @@ def create_system_two_node_graph(
             NodeResponse(
                 node_role=NodeRole.Synthesizer,
                 node_response=system_two_state.system_two_response,
-                node_msv=system_two_state.metacognitive_vector,
+                node_msv=system_two_state.metacognitive_vector.system_two_metacognitive_vector,
             )
         )
     system_two_edges = list(pairwise(system_two_nodes))
